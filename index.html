@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Maintenance Cost Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+:root{
+  --bg:#0d0f14;--surface:#13161e;--surface2:#1a1e2a;--border:#252a38;
+  --accent:#f0a500;--accent2:#e05a2b;--accent3:#3b82f6;--accent4:#10b981;
+  --text:#e8eaf0;--muted:#6b7280;
+  /* depot aliases */
+  --surf:var(--surface);--surf2:var(--surface2);--bdr:var(--border);
+  --acc:var(--accent);--acc2:var(--accent2);--acc3:var(--accent3);--acc4:var(--accent4);
+  --txt:var(--text);--mut:var(--muted);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100;}
+.logo{font-weight:800;font-size:17px;display:flex;align-items:center;gap:8px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+.header-right{display:flex;align-items:center;gap:10px;}
+.data-badge,.badge{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 10px;}
+.data-badge span,.badge b{color:var(--accent4);font-weight:500;}
+.upload-btn,.ubtn{background:var(--accent);color:#000;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;border:none;border-radius:6px;padding:7px 15px;cursor:pointer;}
+.upload-btn:hover,.ubtn:hover{opacity:.85;}
+#fileInput{display:none;}
+
+/* ── TABS ── */
+.tab-bar{background:var(--surface);border-bottom:2px solid var(--border);padding:0 28px;display:flex;gap:0;}
+.tab-btn{font-family:'Syne',sans-serif;font-weight:600;font-size:13px;padding:12px 22px;background:transparent;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-panel{display:none;}.tab-panel.active{display:block;}
+
+/* ── FILTER BAR ── */
+.filters-bar,.fbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 28px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.filter-label,.flbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;}
+.filter-sep,.fsep{width:1px;height:22px;background:var(--border);margin:0 4px;}
+select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:5px 10px;border-radius:5px;cursor:pointer;outline:none;}
+select:focus,select.af{border-color:var(--accent);color:var(--accent);}
+.reset-btn,.rbtn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;padding:5px 11px;border-radius:5px;cursor:pointer;}
+.reset-btn:hover,.rbtn:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* ── MULTI-SELECT ── */
+.ms-wrap{position:relative;display:inline-block;}
+.ms-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:5px 28px 5px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;min-width:120px;position:relative;user-select:none;line-height:1.4;}
+.ms-btn.af{border-color:var(--accent);color:var(--accent);}
+.ms-arr{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:inherit;}
+.ms-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;min-width:170px;max-height:260px;overflow-y:auto;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.ms-drop.open{display:block;}
+.ms-drop label{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap;}
+.ms-drop label:hover{background:rgba(240,165,0,.07);color:var(--text);}
+.ms-drop label input{accent-color:var(--accent);width:13px;height:13px;cursor:pointer;flex-shrink:0;}
+.ms-drop label.on{color:var(--text);}
+.ms-clr{padding:6px 12px;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;color:var(--accent2);cursor:pointer;text-align:center;}
+.ms-clr:hover{background:rgba(224,90,43,.08);}
+
+/* ── LOADING ── */
+#loadingOverlay{display:none;position:fixed;inset:0;background:rgba(13,15,20,.88);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+#loadingOverlay.active{display:flex;}
+.spinner,.spin{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text,.sptxt{font-family:'DM Mono',monospace;font-size:13px;color:var(--muted);}
+
+/* ── OVERVIEW LAYOUT ── */
+main{padding:24px 28px;display:flex;flex-direction:column;gap:20px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 22px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kpi:hover{border-color:var(--accent);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kpi.amber::before{background:var(--accent);}.kpi.red::before{background:var(--accent2);}
+.kpi.blue::before{background:var(--accent3);}.kpi.green::before{background:var(--accent4);}.kpi.purple::before{background:#a78bfa;}
+.kpi-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;}
+.kpi-value{font-weight:800;font-size:24px;letter-spacing:-1px;line-height:1;}
+.kpi.amber .kpi-value{color:var(--accent);}.kpi.red .kpi-value{color:var(--accent2);}
+.kpi.blue .kpi-value{color:var(--accent3);}.kpi.green .kpi-value{color:var(--accent4);}.kpi.purple .kpi-value{color:#a78bfa;}
+.kpi-sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-top:5px;}
+.chart-row{display:grid;gap:14px;}
+.chart-row.two-col{grid-template-columns:2fr 1fr;}.chart-row.half{grid-template-columns:1fr 1fr;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px;display:flex;flex-direction:column;gap:14px;}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;}
+.card-title{font-weight:700;font-size:14px;letter-spacing:-.3px;}
+.card-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px;}
+.section-title{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.legend,.leg{display:flex;gap:8px;flex-wrap:wrap;}
+.legend-item,.li{display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.legend-dot,.ld{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.asset-table,.atbl{width:100%;border-collapse:collapse;}
+.asset-table th,.atbl th{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+.asset-table td,.atbl td{font-family:'DM Mono',monospace;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(37,42,56,.4);}
+.asset-table tr:hover td,.atbl tr:hover td{background:var(--surface2);}
+.cost-cell,.cc{color:var(--accent);font-weight:500;}
+.bar-cell{display:flex;align-items:center;gap:8px;}
+.mini-bar,.mbar{height:4px;border-radius:2px;background:var(--accent);opacity:.7;display:inline-block;}
+.asset-tag,.btag{font-family:'DM Mono',monospace;font-size:10px;padding:2px 5px;border-radius:3px;border:1px solid var(--border);color:var(--muted);}
+.recharge-split{display:flex;gap:12px;}
+.rs-item{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;}
+.rs-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.rs-value{font-weight:700;font-size:20px;}
+.rs-pct{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* ── DEPOT LAYOUT ── */
+.krow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+.kcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 22px;position:relative;overflow:hidden;}
+.kcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.ka::before{background:var(--accent);}.kb::before{background:var(--accent2);}.kc::before{background:var(--accent3);}.kd::before{background:var(--accent4);}.ke::before{background:#a78bfa;}
+.klbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;}
+.kval{font-weight:800;font-size:24px;letter-spacing:-1px;line-height:1;}
+.ka .kval{color:var(--accent);}.kb .kval{color:var(--acc2);}.kc .kval{color:var(--acc3);}.kd .kval{color:var(--acc4);}.ke .kval{color:#a78bfa;}
+.ksub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-top:5px;}
+.sec{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.dstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;}
+.dcard{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;cursor:pointer;transition:all .15s;}
+.dcard:hover{border-color:rgba(240,165,0,.5);}
+.dcard.sel{border-color:var(--accent);background:rgba(240,165,0,.06);}
+.dlbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.dval{font-weight:700;font-size:16px;letter-spacing:-.5px;}
+.dpct{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;}
+.drc{font-family:'DM Mono',monospace;font-size:10px;color:var(--acc4);margin-top:2px;}
+.grow{display:grid;gap:14px;}
+.half{grid-template-columns:1fr 1fr;}.twocol{grid-template-columns:2fr 1fr;}
+
+@media(max-width:1200px){
+  .dstrip{grid-template-columns:repeat(4,1fr);}
+  .half,.twocol,.chart-row.two-col,.chart-row.half{grid-template-columns:1fr;}
+  .kpi-grid,.krow{grid-template-columns:repeat(2,1fr);}
+}
+
+</style>
+</head>
+<body>
+<div id="loadingOverlay"><div class="spinner"></div><div class="loading-text" id="loadingMsg">Processing file...</div></div>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>Maintenance Cost Dashboard</div>
+  <div class="header-right">
+    <div class="data-badge" id="dataBadge"><span>—</span></div>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">&#8593; Load / Update Data</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleUpload(event)">
+  </div>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-ov" onclick="switchTab('ov')">&#9724; Overview</button>
+  <button class="tab-btn" id="tab-dp" onclick="switchTab('dp')">&#9724; Depot Analysis</button>
+</div>
+
+<!-- ── OVERVIEW TAB ── -->
+<div id="panel-ov" class="tab-panel active">
+  <div class="filters-bar">
+    <span class="filter-label">Date:</span>
+    <div class="ms-wrap" id="ov-fYear-wrap"></div>
+    <div class="ms-wrap" id="ov-fMonth-wrap"></div>
+    <div class="ms-wrap" id="ov-fWeek-wrap"></div>
+    <div class="filter-sep"></div>
+    <span class="filter-label">Filter:</span>
+    <div class="ms-wrap" id="ov-fType-wrap"></div>
+    <div class="ms-wrap" id="ov-fCG-wrap"></div>
+    <select id="ov-fAsset" onchange="render()"><option value="">All Asset Types</option></select>
+    <select id="ov-fRecharge" onchange="render()">
+      <option value="">Recharge: All</option>
+      <option value="Y">Recharged Only</option>
+      <option value="N">Non-Recharged Only</option>
+    </select>
+    <button class="reset-btn" onclick="ovResetFilters()">&#10005; Reset</button>
+  </div>
+  <main>
+    <div class="kpi-grid">
+      <div class="kpi amber"><div class="kpi-label">Total Maintenance Cost</div><div class="kpi-value" id="kpiTotal"></div><div class="kpi-sub" id="kpiSub1"></div></div>
+      <div class="kpi red"><div class="kpi-label">Avg Monthly Cost</div><div class="kpi-value" id="kpiMonthly"></div><div class="kpi-sub" id="kpiSub2"></div></div>
+      <div class="kpi blue"><div class="kpi-label">Total Jobs</div><div class="kpi-value" id="kpiJobs"></div><div class="kpi-sub">Unique job numbers</div></div>
+      <div class="kpi green"><div class="kpi-label">Avg Cost / Job</div><div class="kpi-value" id="kpiAvgJob"></div><div class="kpi-sub">Total cost &divide; jobs</div></div>
+      <div class="kpi purple"><div class="kpi-label">Total Recharge</div><div class="kpi-value" id="kpiRecharge"></div><div class="kpi-sub" id="kpiSub5"></div></div>
+    </div>
+    <div class="section-title">Cost Trends</div>
+    <div class="chart-row two-col">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Monthly Cost by Cost Group</div><div class="card-sub">Stacked — all cost groups over time</div></div><div class="legend" id="cgLegend"></div></div>
+        <div style="position:relative;height:280px"><canvas id="cMonthlyCG"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Cost Group Split</div><div class="card-sub">Total cost by category</div></div></div>
+        <div style="position:relative;height:240px"><canvas id="cCGDonut"></canvas></div>
+      </div>
+    </div>
+    <div class="section-title">Work Type Analysis</div>
+    <div class="chart-row two-col">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Monthly Cost by Work Type</div><div class="card-sub">Stacked — all work types over time</div></div><div class="legend" id="typeLegend"></div></div>
+        <div style="position:relative;height:280px"><canvas id="cMonthlyType"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Work Type Split</div><div class="card-sub">Total cost by work type</div></div></div>
+        <div style="position:relative;height:240px"><canvas id="cTypeBar"></canvas></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── DEPOT TAB ── -->
+<div id="panel-dp" class="tab-panel">
+  <div class="fbar">
+    <span class="flbl">Date:</span>
+    <div class="ms-wrap" id="fYear-wrap"></div>
+    <div class="ms-wrap" id="fMonth-wrap"></div>
+    <div class="ms-wrap" id="fWeek-wrap"></div>
+    <div class="fsep"></div>
+    <span class="flbl">Filter:</span>
+    <select id="fD"><option value="">All Depots</option></select>
+    <div class="ms-wrap" id="fT-wrap"></div>
+    <div class="ms-wrap" id="fG-wrap"></div>
+    <select id="fR">
+      <option value="">Recharge: All</option>
+      <option value="Y">Recharged Only</option>
+      <option value="N">Non-Recharged Only</option>
+    </select>
+    <button class="rbtn" id="resetBtn">&#10005; Reset</button>
+  </div>
+  <main>
+    <div class="krow">
+      <div class="kcard ka"><div class="klbl">Total Cost</div><div class="kval" id="k0">—</div><div class="ksub" id="k0s">—</div></div>
+      <div class="kcard kb"><div class="klbl">Avg Monthly</div><div class="kval" id="k1">—</div><div class="ksub" id="k1s">—</div></div>
+      <div class="kcard kc"><div class="klbl">Total Jobs</div><div class="kval" id="k2">—</div><div class="ksub">Unique job numbers</div></div>
+      <div class="kcard kd"><div class="klbl">Avg Cost / Job</div><div class="kval" id="k3">—</div><div class="ksub">Total &divide; jobs</div></div>
+      <div class="kcard ke"><div class="klbl">Total Recharge</div><div class="kval" id="k4">—</div><div class="ksub" id="k4s">—</div></div>
+    </div>
+    <div class="sec">Depot Summary — click to filter</div>
+    <div class="dstrip" id="dstrip"></div>
+    <div class="sec">Monthly &amp; Total by Depot</div>
+    <div class="grow half">
+      <div class="card"><div><div class="card-title">Monthly Cost by Depot</div><div class="card-sub">Stacked bar</div></div><div class="leg" id="leg1"></div><div style="position:relative;height:240px"><canvas id="cMD"></canvas></div></div>
+      <div class="card"><div><div class="card-title">Total Cost by Depot</div><div class="card-sub">Ranked</div></div><div style="position:relative;height:240px"><canvas id="cDB"></canvas></div></div>
+    </div>
+    <div class="sec">Cost Breakdown</div>
+    <div class="grow half">
+      <div class="card"><div><div class="card-title">Cost Group Mix over Time</div><div class="card-sub">Stacked by cost group per period</div></div><div style="position:relative;height:240px"><canvas id="cCG"></canvas></div></div>
+      <div class="card"><div><div class="card-title">Work Type per Depot</div><div class="card-sub">Grouped by type</div></div><div style="position:relative;height:240px"><canvas id="cDT"></canvas></div></div>
+    </div>
+    <div class="sec">Recharge &amp; Monthly Detail</div>
+    <div class="grow half">
+      <div class="card"><div><div class="card-title">Net vs Recharged per Depot</div><div class="card-sub">Net cost + recharged overlay</div></div><div style="position:relative;height:240px"><canvas id="cRC"></canvas></div></div>
+      <div class="card"><div><div class="card-title">Monthly Work Type</div><div class="card-sub" id="dmtSub">All depots combined</div></div><div style="position:relative;height:240px"><canvas id="cDMT"></canvas></div></div>
+    </div>
+    <div class="sec">Asset Analysis</div>
+    <div class="grow twocol">
+      <div class="card"><div><div class="card-title">Top Assets</div><div class="card-sub" id="atSub">Top 20 assets</div></div>
+        <div style="overflow-y:auto;max-height:320px"><table class="atbl"><thead><tr><th>ID</th><th>Description</th><th>Total Cost</th><th style="width:100px">Share</th></tr></thead><tbody id="atbody"></tbody></table></div>
+      </div>
+      <div class="card"><div><div class="card-title">Monthly Jobs per Depot</div><div class="card-sub">Unique job count</div></div><div class="leg" id="leg2"></div><div style="position:relative;height:280px"><canvas id="cDJ"></canvas></div></div>
+
+    <div class="section-title">Recharge Analysis</div>
+    <div class="chart-row half">
+      <div class="card" style="gap:16px">
+        <div class="card-header"><div><div class="card-title">Recharge vs Non-Recharge</div><div class="card-sub">Cost split by recharge flag</div></div></div>
+        <div class="recharge-split" id="rechargeSplit"></div>
+        <div style="position:relative;height:180px"><canvas id="cRecharge"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Monthly Jobs Volume</div><div class="card-sub">Unique job count per period</div></div></div>
+        <div style="position:relative;height:220px"><canvas id="cJobs"></canvas></div>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<script>
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════════════
+var activeTab='ov';
+function switchTab(tab){
+  activeTab=tab;
+  document.getElementById('panel-ov').classList.toggle('active', tab==='ov');
+  document.getElementById('panel-dp').classList.toggle('active', tab==='dp');
+  document.getElementById('tab-ov').classList.toggle('active', tab==='ov');
+  document.getElementById('tab-dp').classList.toggle('active', tab==='dp');
+  // Trigger chart resize after tab switch
+  setTimeout(function(){
+    Object.values(charts).forEach(function(c){if(c&&c.resize)c.resize();});
+  },50);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MULTI-SELECT WIDGET
+// ═══════════════════════════════════════════════════════════════════════════
+var MS={};
+function msInit(id){if(!MS[id])MS[id]=new Set();}
+function msVals(id){return MS[id]?Array.from(MS[id]):[];}
+function msHasAny(id){return MS[id]&&MS[id].size>0;}
+function msClearAll(id){if(MS[id])MS[id].clear();}
+function msRefreshBtn(id,ph){
+  var sel=MS[id]||new Set();var btn=document.getElementById(id+'-btn');if(!btn)return;
+  if(sel.size===0){btn.innerHTML=ph+'<span class="ms-arr">&#9662;</span>';btn.classList.remove('af');}
+  else{var v=Array.from(sel);btn.innerHTML=(v.length===1?v[0]:v.length+' selected')+'<span class="ms-arr">&#9662;</span>';btn.classList.add('af');}
+}
+function msToggleDrop(id){
+  var drop=document.getElementById(id+'-drop');if(!drop)return;
+  var isOpen=drop.classList.contains('open');
+  document.querySelectorAll('.ms-drop.open').forEach(function(d){d.classList.remove('open');});
+  if(!isOpen)drop.classList.add('open');
+}
+function msBuild(id,vals,ph,onCh,clearOthers){
+  msInit(id);var wrap=document.getElementById(id+'-wrap');if(!wrap)return;
+  var sel=MS[id];
+  var btnEl=document.createElement('div');btnEl.id=id+'-btn';btnEl.className='ms-btn'+(sel.size>0?' af':'');
+  btnEl.onclick=function(e){e.stopPropagation();msToggleDrop(id);};
+  var drop=document.createElement('div');drop.id=id+'-drop';drop.className='ms-drop';
+  if(vals.length===0){var em=document.createElement('div');em.style.cssText='padding:8px 12px;font-family:DM Mono,monospace;font-size:11px;color:var(--muted);';em.textContent='Load file to enable';drop.appendChild(em);}
+  vals.forEach(function(v){
+    var lbl=document.createElement('label');lbl.className=sel.has(v)?'on':'';
+    var chk=document.createElement('input');chk.type='checkbox';chk.checked=sel.has(v);
+    chk.onclick=function(e){e.stopPropagation();};
+    chk.onchange=function(){
+      if(this.checked){
+        if(clearOthers&&clearOthers.length){clearOthers.forEach(function(oid){msClearAll(oid);msRefreshBtn(oid,document.getElementById(oid+'-btn')?document.getElementById(oid+'-btn').dataset.ph:'');var od=document.getElementById(oid+'-drop');if(od)od.querySelectorAll('input').forEach(function(c){c.checked=false;c.parentElement.className='';});});}
+        sel.add(v);this.parentElement.className='on';
+      } else {sel.delete(v);this.parentElement.className='';}
+      msRefreshBtn(id,ph);if(onCh)onCh();
+    };
+    lbl.appendChild(chk);lbl.appendChild(document.createTextNode(v));drop.appendChild(lbl);
+  });
+  var clr=document.createElement('div');clr.className='ms-clr';clr.textContent='Clear';
+  clr.onclick=function(e){e.stopPropagation();sel.clear();drop.querySelectorAll('input').forEach(function(c){c.checked=false;c.parentElement.className='';});msRefreshBtn(id,ph);document.getElementById(id+'-drop').classList.remove('open');if(onCh)onCh();};
+  drop.appendChild(clr);wrap.innerHTML='';wrap.appendChild(btnEl);wrap.appendChild(drop);
+  btnEl.dataset.ph=ph;msRefreshBtn(id,ph);
+}
+document.addEventListener('click',function(){document.querySelectorAll('.ms-drop.open').forEach(function(d){d.classList.remove('open');});});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+function parseDt(r){
+  if(r._date) return r._date;
+  var d=r['Date'];
+  var dt=d instanceof Date?d:typeof d==='number'?new Date((d-25569)*86400*1000):new Date(d);
+  r._date=isNaN(dt.getTime())?null:dt; return r._date;
+}
+
+function isoWeek(dt){
+  var d=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate()));
+  var day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day);
+  var ys=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return d.getUTCFullYear()+'-W'+String(Math.ceil((((d-ys)/86400000)+1)/7)).padStart(2,'0');
+}
+
+function rYear(r){var dt=parseDt(r);return dt?String(dt.getFullYear()):'';}
+
+function rMonth(r){var dt=parseDt(r);return dt?dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'):'';}
+
+function rWeek(r){var dt=parseDt(r);return dt?isoWeek(dt):'';}
+
+
+function uniqSort(arr){return arr.filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort();}
+
+
+function fmt(v){return v>=1e6?'$'+(v/1e6).toFixed(2)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+v.toFixed(0);}
+
+function fmtFull(v){return '$'+Number(v).toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});}
+
+function kill(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+
+function fillSel(id,vals,ph){
+  var el=document.getElementById(id),cur=el.value;
+  el.innerHTML='<option value="">'+ph+'</option>';
+  vals.forEach(function(v){el.innerHTML+='<option value="'+v+'"'+(v===cur?' selected':'')+'>'+v+'</option>';});
+}
+
+
+function fmtF(v){return '$'+Number(v).toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});}
+
+function dc(ix){return DC[ix%DC.length];}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OVERVIEW AGG + INDEX
+// ═══════════════════════════════════════════════════════════════════════════
+function buildAgg(rows){
+  var mTotal={},mCG={},mType={},wCG={},wType={};
+  var mCGType={},bCGType={},bRCType={};
+  var bType={},bCG={},bRecharge={},jm={},jwk={},jtm={},jmt={},jwkt={},asMap={};
+  var gt=0,rt=0,jobSet=new Set();
+  rows.forEach(function(r){
+    var mo=rMonth(r),wk=rWeek(r),ty=r['Type']||'',cg=r['Cost Group']||'',rc=r['Recharge']||'N';
+    var cost=parseFloat(r['Total Cost'])||0;
+    gt+=cost; if(rc==='Y')rt+=cost;
+    if(r['Job No.'])jobSet.add(r['Job No.']);
+    mTotal[mo]=(mTotal[mo]||0)+cost;
+    var mck=mo+'|'+cg; mCG[mck]=(mCG[mck]||0)+cost;
+    var mtk=mo+'|'+ty; mType[mtk]=(mType[mtk]||0)+cost;
+    var wck=wk+'|'+cg; wCG[wck]=(wCG[wck]||0)+cost;
+    var wtk=wk+'|'+ty; wType[wtk]=(wType[wtk]||0)+cost;
+    // Cross-dimension arrays
+    var mctk=mo+'|'+cg+'|'+ty; mCGType[mctk]=(mCGType[mctk]||0)+cost;
+    var bctk=cg+'|'+ty;        bCGType[bctk]=(bCGType[bctk]||0)+cost;
+    var brtk=rc+'|'+ty;        bRCType[brtk]=(bRCType[brtk]||0)+cost;
+    bType[ty]=(bType[ty]||0)+cost;
+    bCG[cg]=(bCG[cg]||0)+cost;
+    bRecharge[rc]=(bRecharge[rc]||0)+cost;
+    if(!jm[mo])jm[mo]=new Set(); if(r['Job No.'])jm[mo].add(r['Job No.']);
+    if(!jwk[wk])jwk[wk]=new Set(); if(r['Job No.'])jwk[wk].add(r['Job No.']);
+    if(!jtm[ty])jtm[ty]=new Set(); if(r['Job No.'])jtm[ty].add(r['Job No.']);
+    var jmtk=mo+'|'+ty; if(!jmt[jmtk])jmt[jmtk]=new Set(); if(r['Job No.'])jmt[jmtk].add(r['Job No.']);
+    var jwktk=wk+'|'+ty; if(!jwkt[jwktk])jwkt[jwktk]=new Set(); if(r['Job No.'])jwkt[jwktk].add(r['Job No.']);
+    var ak=(r['ItemNo']||'')+'||'+(r['Item Desc']||'');
+    if(!asMap[ak])asMap[ak]={itemNo:r['ItemNo']||'',itemDesc:r['Item Desc']||'',total:0};
+    asMap[ak].total+=cost;
+  });
+  function toArr(obj,kfn){return Object.keys(obj).sort().map(function(k){var o=kfn(k);o.total=Math.round(obj[k]*100)/100;return o;});}
+  function uniq(arr){return arr.filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort();}
+  var monthly_total  =toArr(mTotal,function(k){return{month:k};});
+  var monthly_cg     =toArr(mCG,   function(k){var p=k.split('|');return{month:p[0],costGroup:p[1]};});
+  var monthly_type   =toArr(mType, function(k){var p=k.split('|');return{month:p[0],type:p[1]};});
+  var weekly_cg      =toArr(wCG,   function(k){var p=k.split('|');return{week:p[0],costGroup:p[1]};});
+  var weekly_type    =toArr(wType,  function(k){var p=k.split('|');return{week:p[0],type:p[1]};});
+  var monthly_cg_type=toArr(mCGType,function(k){var p=k.split('|');return{month:p[0],costGroup:p[1],type:p[2]};});
+  var by_cg_type     =toArr(bCGType,function(k){var p=k.split('|');return{costGroup:p[0],type:p[1]};});
+  var by_recharge_type=toArr(bRCType,function(k){var p=k.split('|');return{recharge:p[0],type:p[1]};});
+  var by_type        =toArr(bType,    function(k){return{type:k};});
+  var by_cg          =toArr(bCG,      function(k){return{costGroup:k};});
+  var by_recharge    =toArr(bRecharge,function(k){return{recharge:k};});
+  var jobs_month     =Object.keys(jm).sort().map(function(k){return{month:k,jobs:jm[k].size};});
+  var jobs_week      =Object.keys(jwk).sort().map(function(k){return{week:k,jobs:jwk[k].size};});
+  var jobs_by_type   =Object.keys(jtm).sort().map(function(k){return{type:k,jobs:jtm[k].size};});
+  var jobs_month_type=Object.keys(jmt).sort().map(function(k){var p=k.split('|');return{month:p[0],type:p[1],jobs:jmt[k].size};});
+  var jobs_week_type =Object.keys(jwkt).sort().map(function(k){var p=k.split('|');return{week:p[0],type:p[1],jobs:jwkt[k].size};});
+  var by_asset=Object.values(asMap).map(function(x){return{itemNo:x.itemNo,itemDesc:x.itemDesc,total:Math.round(x.total*100)/100};}).sort(function(a,b){return b.total-a.total;}).slice(0,30);
+  var atMap={};by_asset.forEach(function(r){atMap[r.itemDesc]=(atMap[r.itemDesc]||0)+r.total;});
+  var by_asset_type=Object.keys(atMap).map(function(k){return{itemDesc:k,total:atMap[k]};}).sort(function(a,b){return b.total-a.total;});
+  var mos=Object.keys(mTotal).sort();
+  return{monthly_total:monthly_total,monthly_cg:monthly_cg,monthly_type:monthly_type,
+    weekly_cg:weekly_cg,weekly_type:weekly_type,
+    monthly_cg_type:monthly_cg_type,by_cg_type:by_cg_type,by_recharge_type:by_recharge_type,
+    by_type:by_type,by_cg:by_cg,by_recharge:by_recharge,
+    jobs_month:jobs_month,jobs_week:jobs_week,jobs_by_type:jobs_by_type,jobs_month_type:jobs_month_type,jobs_week_type:jobs_week_type,
+    by_asset:by_asset,by_asset_type:by_asset_type,
+    grand_total:Math.round(gt*100)/100,recharge_total:Math.round(rt*100)/100,
+    total_jobs:jobSet.size,total_rows:rows.length,
+    date_range:mos.length?[mos[0],mos[mos.length-1]]:['',''],
+    types:uniq(rows.map(function(r){return r['Type'];})),
+    cost_groups:uniq(rows.map(function(r){return r['Cost Group'];})),
+    assets:uniq(rows.map(function(r){return r['Item Desc'];}))};
+}
+
+
+
+
+
+function mergeAggs(aggs){
+  if(aggs.length===0)return null;
+  if(aggs.length===1)return aggs[0];
+  function mArr(arrs,kfn){var m={};arrs.forEach(function(arr){(arr||[]).forEach(function(r){var k=kfn(r);if(!m[k])m[k]=JSON.parse(JSON.stringify(r));else m[k].total+=r.total;});});return Object.values(m);}
+  var result={};var first=aggs[0];
+  result.monthly_total    =mArr(aggs.map(function(a){return a.monthly_total;}),    function(r){return r.month;});
+  result.monthly_cg       =mArr(aggs.map(function(a){return a.monthly_cg;}),       function(r){return r.month+'|'+r.costGroup;});
+  result.monthly_type     =mArr(aggs.map(function(a){return a.monthly_type;}),     function(r){return r.month+'|'+r.type;});
+  result.weekly_cg        =mArr(aggs.map(function(a){return a.weekly_cg||[];}),    function(r){return r.week+'|'+r.costGroup;});
+  result.weekly_type      =mArr(aggs.map(function(a){return a.weekly_type||[];}),  function(r){return r.week+'|'+r.type;});
+  result.monthly_cg_type  =mArr(aggs.map(function(a){return a.monthly_cg_type||[];}),function(r){return r.month+'|'+r.costGroup+'|'+r.type;});
+  result.by_cg_type       =mArr(aggs.map(function(a){return a.by_cg_type||[];}),   function(r){return r.costGroup+'|'+r.type;});
+  result.by_recharge_type =mArr(aggs.map(function(a){return a.by_recharge_type||[];}),function(r){return r.recharge+'|'+r.type;});
+  result.by_type          =mArr(aggs.map(function(a){return a.by_type;}),           function(r){return r.type;});
+  result.by_cg            =mArr(aggs.map(function(a){return a.by_cg;}),             function(r){return r.costGroup;});
+  result.by_recharge      =mArr(aggs.map(function(a){return a.by_recharge;}),       function(r){return r.recharge;});
+  result.jobs_month       =mArr(aggs.map(function(a){return a.jobs_month;}),            function(r){return r.month;});
+  result.jobs_week        =mArr(aggs.map(function(a){return a.jobs_week||[];}),          function(r){return r.week;});
+  result.jobs_by_type     =mArr(aggs.map(function(a){return a.jobs_by_type||[];}),       function(r){return r.type;});
+  result.jobs_month_type  =mArr(aggs.map(function(a){return a.jobs_month_type||[];}),    function(r){return r.month+'|'+r.type;});
+  result.jobs_week_type   =mArr(aggs.map(function(a){return a.jobs_week_type||[];}),     function(r){return r.week+'|'+r.type;});
+  result.by_asset         =mArr(aggs.map(function(a){return a.by_asset;}),          function(r){return r.itemNo+'||'+r.itemDesc;});
+  result.by_asset_type    =mArr(aggs.map(function(a){return a.by_asset_type;}),     function(r){return r.itemDesc;});
+  result.by_asset=result.by_asset.sort(function(a,b){return b.total-a.total;}).slice(0,30);
+  result.by_asset_type=result.by_asset_type.sort(function(a,b){return b.total-a.total;});
+  result.grand_total   =Math.round(aggs.reduce(function(s,a){return s+a.grand_total;},0)*100)/100;
+  result.recharge_total=Math.round(aggs.reduce(function(s,a){return s+a.recharge_total;},0)*100)/100;
+  result.total_jobs    =Math.round(aggs.reduce(function(s,a){return s+a.total_jobs;},0));
+  result.total_rows    =aggs.reduce(function(s,a){return s+a.total_rows;},0);
+  var allMonths=result.monthly_total.map(function(r){return r.month;}).sort();
+  result.date_range=allMonths.length?[allMonths[0],allMonths[allMonths.length-1]]:['',''];
+  result.types=first.types;result.cost_groups=first.cost_groups;result.assets=first.assets;
+  return result;
+}
+
+
+
+
+function resolveAgg(IDX,yrs,mos,wks){
+  if(!IDX) return null;
+  // Priority: weeks > months > years > all
+  if(wks&&wks.length){
+    var aggs=wks.map(function(w){return IDX.by_week[w];}).filter(Boolean);
+    return mergeAggs(aggs)||IDX.all;
+  }
+  if(mos&&mos.length){
+    var aggs2=mos.map(function(mo){return IDX.by_month[mo];}).filter(Boolean);
+    return mergeAggs(aggs2)||IDX.all;
+  }
+  if(yrs&&yrs.length){
+    var aggs3=yrs.map(function(y){return IDX.by_year[y];}).filter(Boolean);
+    return mergeAggs(aggs3)||IDX.all;
+  }
+  return IDX.all;
+}
+
+
+function buildIDX(rows){
+  // Pre-parse all dates and depot once
+  rows.forEach(function(r){parseDt(r);if(!r._depot)r._depot=r['Job No.']?String(r['Job No.']).split('/')[0].trim():'';});
+  // Single pass: bucket rows by year/month/week
+  var byYear={},byMonth={},byWeek={},years=[],months=[],weeks=[];
+  rows.forEach(function(r){
+    var y=rYear(r),mo=rMonth(r),wk=rWeek(r);
+    if(y){if(!byYear[y]){byYear[y]=[];years.push(y);}byYear[y].push(r);}
+    if(mo){if(!byMonth[mo]){byMonth[mo]=[];months.push(mo);}byMonth[mo].push(r);}
+    if(wk){if(!byWeek[wk]){byWeek[wk]=[];weeks.push(wk);}byWeek[wk].push(r);}
+  });
+  years.sort();months.sort();weeks.sort();
+  var idx={years:years,months:months,weeks:weeks,all:buildAgg(rows),by_year:{},by_month:{},by_week:{}};
+  years.forEach(function(y){idx.by_year[y]=buildAgg(byYear[y]);});
+  months.forEach(function(mo){idx.by_month[mo]=buildAgg(byMonth[mo]);});
+  weeks.forEach(function(wk){idx.by_week[wk]=buildAgg(byWeek[wk]);});
+  return idx;
+}
+
+
+
+function applyNonDateFilters(agg,f){
+  var hasType=f.types&&f.types.length;
+  var hasCG  =f.cgs&&f.cgs.length;
+  var hasAsset=f.asset&&f.asset.length;
+  var hasRC  =f.recharge;
+  if(!hasType&&!hasCG&&!hasAsset&&!hasRC)return agg;
+  var a={};Object.keys(agg).forEach(function(k){a[k]=agg[k];});
+
+  // ── Filter each array dimension ───────────────────────────────────────────
+  if(hasType){
+    // monthly_type and by_type: direct filter
+    a.by_type    =agg.by_type.filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    a.monthly_type=(agg.monthly_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    a.weekly_type =(agg.weekly_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    // Derive monthly_cg filtered by type using cross array
+    var mctSrc=(agg.monthly_cg_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    var mCGmap={};mctSrc.forEach(function(r){var k=r.month+'|'+r.costGroup;mCGmap[k]=(mCGmap[k]||0)+r.total;});
+    a.monthly_cg=Object.keys(mCGmap).sort().map(function(k){var p=k.split('|');return{month:p[0],costGroup:p[1],total:Math.round(mCGmap[k]*100)/100};});
+    // Derive by_cg filtered by type
+    var bctSrc=(agg.by_cg_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    var bCGmap={};bctSrc.forEach(function(r){bCGmap[r.costGroup]=(bCGmap[r.costGroup]||0)+r.total;});
+    a.by_cg=Object.keys(bCGmap).sort().map(function(k){return{costGroup:k,total:Math.round(bCGmap[k]*100)/100};});
+    // Derive by_recharge filtered by type
+    var brtSrc=(agg.by_recharge_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    var bRCmap={};brtSrc.forEach(function(r){bRCmap[r.recharge]=(bRCmap[r.recharge]||0)+r.total;});
+    a.by_recharge=Object.keys(bRCmap).sort().map(function(k){return{recharge:k,total:Math.round(bRCmap[k]*100)/100};});
+    // grand_total from filtered by_type
+    a.grand_total=Math.round(a.by_type.reduce(function(s,r){return s+r.total;},0)*100)/100;
+  }
+
+  if(hasCG){
+    a.by_cg     =a.by_cg.filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
+    a.monthly_cg=(a.monthly_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
+    a.weekly_cg =(agg.weekly_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
+    if(!hasType) a.grand_total=Math.round(a.by_cg.reduce(function(s,r){return s+r.total;},0)*100)/100;
+  }
+
+  if(hasRC){
+    a.by_recharge=(a.by_recharge||agg.by_recharge).filter(function(r){return r.recharge===f.recharge;});
+    if(!hasType&&!hasCG) a.grand_total=Math.round(a.by_recharge.reduce(function(s,r){return s+r.total;},0)*100)/100;
+  }
+
+  if(hasAsset){
+    a.by_asset     =(agg.by_asset||[]).filter(function(r){return r.itemDesc===f.asset;});
+    a.by_asset_type=(agg.by_asset_type||[]).filter(function(r){return r.itemDesc===f.asset;});
+  }
+
+  // Recompute recharge_total from filtered by_recharge
+  a.recharge_total=Math.round((a.by_recharge||[]).filter(function(r){return r.recharge==='Y';}).reduce(function(s,r){return s+r.total;},0)*100)/100;
+
+  // Filter job counts using pre-computed cross arrays
+  if(hasType){
+    var jbt=(agg.jobs_by_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    a.total_jobs=jbt.reduce(function(s,r){return s+r.jobs;},0);
+    a.jobs_month=(agg.jobs_month_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;})
+      .reduce(function(acc,r){var ex=acc.find(function(x){return x.month===r.month;});if(ex)ex.jobs+=r.jobs;else acc.push({month:r.month,jobs:r.jobs});return acc;},[]).sort(function(a,b){return a.month<b.month?-1:1;});
+    a.jobs_week=(agg.jobs_week_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;})
+      .reduce(function(acc,r){var ex=acc.find(function(x){return x.week===r.week;});if(ex)ex.jobs+=r.jobs;else acc.push({week:r.week,jobs:r.jobs});return acc;},[]).sort(function(a,b){return a.week<b.week?-1:1;});
+  }
+
+  return a;
+}
+
+
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPOT AGG + INDEX
+// ═══════════════════════════════════════════════════════════════════════════
+function buildDepotAgg(rows,inclAsset){
+  var bDepot={},mDepot={},wDepot={},dCG={},dMCG={},dWCG={},dType={},dMType={},dWType={};
+  var rcm={},jm={},jwk={},jtm={},jmt={},jwkt={},am={};
+  // Cross-dimension: depot+type, depot+cg+type, depot+recharge+type
+  var dDepotType={},dCGType={},dRCType={};
+  var gt=0,rt=0,jobSet=new Set();
+  rows.forEach(function(r){
+    var dep=r._depot,mo=rMonth(r),wk=rWeek(r),ty=r['Type']||'',cg=r['Cost Group']||'',rc=r['Recharge']||'N';
+    var cost=parseFloat(r['Total Cost'])||0;
+    gt+=cost;if(rc==='Y')rt+=cost;
+    if(r['Job No.'])jobSet.add(r['Job No.']);
+    bDepot[dep]=(bDepot[dep]||0)+cost;
+    var mdk=mo+'|'+dep; mDepot[mdk]=(mDepot[mdk]||0)+cost;
+    var wdk=wk+'|'+dep; wDepot[wdk]=(wDepot[wdk]||0)+cost;
+    var dck=dep+'|'+cg; dCG[dck]=(dCG[dck]||0)+cost;
+    var dmck=dep+'|'+mo+'|'+cg; dMCG[dmck]=(dMCG[dmck]||0)+cost;
+    var dwck=dep+'|'+wk+'|'+cg; dWCG[dwck]=(dWCG[dwck]||0)+cost;
+    var dtk=dep+'|'+ty; dType[dtk]=(dType[dtk]||0)+cost;
+    var dmtk=dep+'|'+mo+'|'+ty; dMType[dmtk]=(dMType[dmtk]||0)+cost;
+    var dwtk=dep+'|'+wk+'|'+ty; dWType[dwtk]=(dWType[dwtk]||0)+cost;
+    // Cross-dimension
+    var ddtk=dep+'|'+ty;           dDepotType[ddtk]=(dDepotType[ddtk]||0)+cost;
+    var dcgtk=dep+'|'+cg+'|'+ty;   dCGType[dcgtk]=(dCGType[dcgtk]||0)+cost;
+    var drctk=dep+'|'+rc+'|'+ty;   dRCType[drctk]=(dRCType[drctk]||0)+cost;
+    if(rc==='Y')rcm[dep]=(rcm[dep]||0)+cost;
+    var jk=mo+'|'+dep; if(!jm[jk])jm[jk]={month:mo,depot:dep,s:new Set()};if(r['Job No.'])jm[jk].s.add(r['Job No.']);
+    var jwkk=wk+'|'+dep; if(!jwk[jwkk])jwk[jwkk]={week:wk,depot:dep,s:new Set()};if(r['Job No.'])jwk[jwkk].s.add(r['Job No.']);
+    // Jobs cross: by type
+    var jtk=dep+'|'+ty; if(!jtm[jtk])jtm[jtk]=new Set(); if(r['Job No.'])jtm[jtk].add(r['Job No.']);
+    var jmtk=dep+'|'+mo+'|'+ty; if(!jmt[jmtk])jmt[jmtk]={depot:dep,month:mo,type:ty,s:new Set()};if(r['Job No.'])jmt[jmtk].s.add(r['Job No.']);
+    var jwktk=dep+'|'+wk+'|'+ty; if(!jwkt[jwktk])jwkt[jwktk]={depot:dep,week:wk,type:ty,s:new Set()};if(r['Job No.'])jwkt[jwktk].s.add(r['Job No.']);
+    if(inclAsset){var ak=dep+'||'+(r['ItemNo']||'')+'||'+(r['Item Desc']||'');if(!am[ak])am[ak]={depot:dep,itemNo:r['ItemNo']||'',itemDesc:r['Item Desc']||'',total:0};am[ak].total+=cost;}
+  });
+  function toA(obj,kfn){return Object.keys(obj).sort().map(function(k){var o=kfn(k);o.total=Math.round(obj[k]*100)/100;return o;});}
+  function uniqS(arr){return arr.filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort();}
+  var by_depot          =toA(bDepot, function(k){return{depot:k};});
+  var monthly_depot     =toA(mDepot, function(k){var p=k.split('|');return{month:p[0],depot:p[1]};});
+  var weekly_depot      =toA(wDepot, function(k){var p=k.split('|');return{week:p[0],depot:p[1]};});
+  var depot_cg          =toA(dCG,   function(k){var p=k.split('|');return{depot:p[0],costGroup:p[1]};});
+  var depot_monthly_cg  =toA(dMCG,  function(k){var p=k.split('|');return{depot:p[0],month:p[1],costGroup:p[2]};});
+  var depot_weekly_cg   =toA(dWCG,  function(k){var p=k.split('|');return{depot:p[0],week:p[1],costGroup:p[2]};});
+  var depot_type        =toA(dType,  function(k){var p=k.split('|');return{depot:p[0],type:p[1]};});
+  var depot_monthly_type=toA(dMType,function(k){var p=k.split('|');return{depot:p[0],month:p[1],type:p[2]};});
+  var depot_weekly_type =toA(dWType, function(k){var p=k.split('|');return{depot:p[0],week:p[1],type:p[2]};});
+  // Cross arrays
+  var depot_type_total  =toA(dDepotType,function(k){var p=k.split('|');return{depot:p[0],type:p[1]};});
+  var depot_cg_type     =toA(dCGType,   function(k){var p=k.split('|');return{depot:p[0],costGroup:p[1],type:p[2]};});
+  var depot_rc_type     =toA(dRCType,   function(k){var p=k.split('|');return{depot:p[0],recharge:p[1],type:p[2]};});
+  var depot_recharge    =Object.keys(rcm).map(function(k){return{depot:k,recharge_total:Math.round(rcm[k]*100)/100};});
+  var depot_jobs        =Object.keys(jm).sort().map(function(k){return{month:jm[k].month,depot:jm[k].depot,jobs:jm[k].s.size};});
+  var depot_jobs_week   =Object.keys(jwk).sort().map(function(k){return{week:jwk[k].week,depot:jwk[k].depot,jobs:jwk[k].s.size};});
+  var depot_jobs_type   =Object.keys(jtm).sort().map(function(k){var p=k.split('|');return{depot:p[0],type:p[1],jobs:jtm[k].size};});
+  var depot_jobs_month_type=Object.keys(jmt).sort().map(function(k){return{depot:jmt[k].depot,month:jmt[k].month,type:jmt[k].type,jobs:jmt[k].s.size};});
+  var depot_jobs_week_type =Object.keys(jwkt).sort().map(function(k){return{depot:jwkt[k].depot,week:jwkt[k].week,type:jwkt[k].type,jobs:jwkt[k].s.size};});
+  var depot_asset=inclAsset?Object.values(am).map(function(x){return{depot:x.depot,itemNo:x.itemNo,itemDesc:x.itemDesc,total:Math.round(x.total*100)/100};}):[];
+  var ms=Object.keys(mDepot).map(function(k){return k.split('|')[0];}).filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort();
+  return{by_depot:by_depot,monthly_depot:monthly_depot,weekly_depot:weekly_depot,
+    depot_cg:depot_cg,depot_monthly_cg:depot_monthly_cg,depot_weekly_cg:depot_weekly_cg,depot_type:depot_type,
+    depot_monthly_type:depot_monthly_type,depot_weekly_type:depot_weekly_type,
+    depot_type_total:depot_type_total,depot_cg_type:depot_cg_type,depot_rc_type:depot_rc_type,
+    depot_recharge:depot_recharge,depot_jobs:depot_jobs,depot_jobs_week:depot_jobs_week,
+    depot_jobs_type:depot_jobs_type,depot_jobs_month_type:depot_jobs_month_type,depot_jobs_week_type:depot_jobs_week_type,
+    depot_asset:depot_asset,
+    grand_total:Math.round(gt*100)/100,recharge_total:Math.round(rt*100)/100,
+    total_jobs:jobSet.size,total_rows:rows.length,
+    date_range:ms.length?[ms[0],ms[ms.length-1]]:['',''],
+    depots:uniqS(rows.map(function(r){return r._depot;})),
+    types:uniqS(rows.map(function(r){return r['Type'];})),
+    cost_groups:uniqS(rows.map(function(r){return r['Cost Group'];}))};
+}
+
+
+
+function buildDepotIDX(rows){
+  rows.forEach(function(r){parseDt(r);if(!r._depot)r._depot=r['Job No.']?String(r['Job No.']).split('/')[0].trim():'';});
+  // Single pass bucket
+  var byYear={},byMonth={},byWeek={},years=[],months=[],weeks=[];
+  rows.forEach(function(r){
+    var y=rYear(r),mo=rMonth(r),wk=rWeek(r);
+    if(y){if(!byYear[y]){byYear[y]=[];years.push(y);}byYear[y].push(r);}
+    if(mo){if(!byMonth[mo]){byMonth[mo]=[];months.push(mo);}byMonth[mo].push(r);}
+    if(wk){if(!byWeek[wk]){byWeek[wk]=[];weeks.push(wk);}byWeek[wk].push(r);}
+  });
+  years.sort();months.sort();weeks.sort();
+  var idx={years:years,months:months,weeks:weeks,all:buildDepotAgg(rows,true),by_year:{},by_month:{},by_week:{}};
+  years.forEach(function(y){idx.by_year[y]=buildDepotAgg(byYear[y],false);});
+  months.forEach(function(mo){idx.by_month[mo]=buildDepotAgg(byMonth[mo],false);});
+  weeks.forEach(function(wk){idx.by_week[wk]=buildDepotAgg(byWeek[wk],false);});
+  return idx;
+}
+
+
+
+function mergeDepotAggs(aggs){
+  if(!aggs||aggs.length===0)return null;
+  if(aggs.length===1)return aggs[0];
+  function mArr(arrs,kfn){var m={};arrs.forEach(function(arr){(arr||[]).forEach(function(r){var k=kfn(r);if(!m[k])m[k]=JSON.parse(JSON.stringify(r));else m[k].total=(m[k].total||0)+r.total;});});return Object.values(m);}
+  function mArrJ(arrs,kfn){var m={};arrs.forEach(function(arr){(arr||[]).forEach(function(r){var k=kfn(r);if(!m[k])m[k]=JSON.parse(JSON.stringify(r));else m[k].jobs=(m[k].jobs||0)+r.jobs;});});return Object.values(m);}
+  var r2={};
+  r2.by_depot              =mArr(aggs.map(function(a){return a.by_depot;}),               function(x){return x.depot;});
+  r2.monthly_depot         =mArr(aggs.map(function(a){return a.monthly_depot;}),           function(x){return x.month+'|'+x.depot;});
+  r2.weekly_depot          =mArr(aggs.map(function(a){return a.weekly_depot||[];}),        function(x){return x.week+'|'+x.depot;});
+  r2.depot_cg              =mArr(aggs.map(function(a){return a.depot_cg;}),                function(x){return x.depot+'|'+x.costGroup;});
+  r2.depot_monthly_cg      =mArr(aggs.map(function(a){return a.depot_monthly_cg||[];}),     function(x){return x.depot+'|'+x.month+'|'+x.costGroup;});
+  r2.depot_weekly_cg       =mArr(aggs.map(function(a){return a.depot_weekly_cg||[];}),      function(x){return x.depot+'|'+x.week+'|'+x.costGroup;});
+  r2.depot_type            =mArr(aggs.map(function(a){return a.depot_type;}),              function(x){return x.depot+'|'+x.type;});
+  r2.depot_monthly_type    =mArr(aggs.map(function(a){return a.depot_monthly_type;}),      function(x){return x.depot+'|'+x.month+'|'+x.type;});
+  r2.depot_weekly_type     =mArr(aggs.map(function(a){return a.depot_weekly_type||[];}),   function(x){return x.depot+'|'+x.week+'|'+x.type;});
+  r2.depot_type_total      =mArr(aggs.map(function(a){return a.depot_type_total||[];}),    function(x){return x.depot+'|'+x.type;});
+  r2.depot_cg_type         =mArr(aggs.map(function(a){return a.depot_cg_type||[];}),       function(x){return x.depot+'|'+x.costGroup+'|'+x.type;});
+  r2.depot_rc_type         =mArr(aggs.map(function(a){return a.depot_rc_type||[];}),       function(x){return x.depot+'|'+x.recharge+'|'+x.type;});
+  var rcm={};aggs.forEach(function(a){(a.depot_recharge||[]).forEach(function(x){rcm[x.depot]=(rcm[x.depot]||0)+x.recharge_total;});});
+  r2.depot_recharge        =Object.keys(rcm).map(function(k){return{depot:k,recharge_total:Math.round(rcm[k]*100)/100};});
+  r2.depot_jobs            =mArrJ(aggs.map(function(a){return a.depot_jobs;}),             function(x){return x.month+'|'+x.depot;});
+  r2.depot_jobs_week       =mArrJ(aggs.map(function(a){return a.depot_jobs_week||[];}),    function(x){return x.week+'|'+x.depot;});
+  r2.depot_jobs_type       =mArrJ(aggs.map(function(a){return a.depot_jobs_type||[];}),    function(x){return x.depot+'|'+x.type;});
+  r2.depot_jobs_month_type =mArrJ(aggs.map(function(a){return a.depot_jobs_month_type||[];}),function(x){return x.depot+'|'+x.month+'|'+x.type;});
+  r2.depot_jobs_week_type  =mArrJ(aggs.map(function(a){return a.depot_jobs_week_type||[];}), function(x){return x.depot+'|'+x.week+'|'+x.type;});
+  r2.depot_asset           =mArr(aggs.map(function(a){return a.depot_asset||[];}),         function(x){return x.depot+'||'+x.itemNo+'||'+x.itemDesc;});
+  r2.grand_total           =Math.round(aggs.reduce(function(s,a){return s+a.grand_total;},0)*100)/100;
+  r2.recharge_total        =Math.round(aggs.reduce(function(s,a){return s+a.recharge_total;},0)*100)/100;
+  r2.total_jobs            =aggs.reduce(function(s,a){return s+a.total_jobs;},0);
+  r2.total_rows            =aggs.reduce(function(s,a){return s+a.total_rows;},0);
+  var allMos=r2.monthly_depot.map(function(x){return x.month;}).sort();
+  r2.date_range=allMos.length?[allMos[0],allMos[allMos.length-1]]:['',''];
+  r2.depots=aggs[0].depots;r2.types=aggs[0].types;r2.cost_groups=aggs[0].cost_groups;
+  return r2;
+}
+
+
+
+
+function resolveDepotAgg(idx2,yrs,mos,wks){
+  if(!idx2||!idx2.by_year||!idx2.by_month||!idx2.by_week)return idx2?idx2.all:null;
+  if(wks&&wks.length){var a=wks.map(function(w){return idx2.by_week[w];}).filter(Boolean);return mergeDepotAggs(a)||idx2.all;}
+  if(mos&&mos.length){var a2=mos.map(function(mo){return idx2.by_month[mo];}).filter(Boolean);return mergeDepotAggs(a2)||idx2.all;}
+  if(yrs&&yrs.length){var a3=yrs.map(function(y){return idx2.by_year[y];}).filter(Boolean);return mergeDepotAggs(a3)||idx2.all;}
+  return idx2.all;
+}
+
+
+function applyDepotFilters(agg,f){
+  var fullAssets=(DP_IDX&&DP_IDX.all&&DP_IDX.all.depot_asset)||agg.depot_asset||[];
+  var a={};Object.keys(agg).forEach(function(k){a[k]=agg[k];});
+
+  // ── Depot filter ────────────────────────────────────────────────────────────
+  if(f.D){
+    a.by_depot            =agg.by_depot.filter(function(r){return r.depot===f.D;});
+    a.monthly_depot       =agg.monthly_depot.filter(function(r){return r.depot===f.D;});
+    a.weekly_depot        =(agg.weekly_depot||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_cg            =agg.depot_cg.filter(function(r){return r.depot===f.D;});
+    a.depot_type          =agg.depot_type.filter(function(r){return r.depot===f.D;});
+    a.depot_monthly_type  =agg.depot_monthly_type.filter(function(r){return r.depot===f.D;});
+    a.depot_weekly_type   =(agg.depot_weekly_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_recharge      =agg.depot_recharge.filter(function(r){return r.depot===f.D;});
+    a.depot_monthly_cg    =agg.depot_monthly_cg.filter(function(r){return r.depot===f.D;});
+    a.depot_weekly_cg     =(agg.depot_weekly_cg||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_jobs          =agg.depot_jobs.filter(function(r){return r.depot===f.D;});
+    a.depot_jobs_week     =(agg.depot_jobs_week||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_type_total    =(agg.depot_type_total||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_cg_type       =(agg.depot_cg_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_rc_type       =(agg.depot_rc_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_jobs_type     =(agg.depot_jobs_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_jobs_month_type=(agg.depot_jobs_month_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depot_jobs_week_type=(agg.depot_jobs_week_type||[]).filter(function(r){return r.depot===f.D;});
+    a.depots=[f.D];
+    a.grand_total    =Math.round(a.by_depot.reduce(function(s,r){return s+r.total;},0)*100)/100;
+    a.recharge_total =Math.round(a.depot_recharge.reduce(function(s,r){return s+r.recharge_total;},0)*100)/100;
+    a.total_jobs     =a.depot_jobs.reduce(function(s,r){return s+r.jobs;},0);
+    a.total_rows     =agg.total_rows;
+  }
+
+  // ── Work Type filter ────────────────────────────────────────────────────────
+  if(f.Ts&&f.Ts.length){
+    a.depot_monthly_type =(a.depot_monthly_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    a.depot_weekly_type  =(a.depot_weekly_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    a.depot_type         =(a.depot_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    // Derive by_depot from cross array filtered by type
+    var dttSrc=(a.depot_type_total||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    var depotMap={};dttSrc.forEach(function(r){depotMap[r.depot]=(depotMap[r.depot]||0)+r.total;});
+    a.by_depot=Object.keys(depotMap).sort().map(function(k){return{depot:k,total:Math.round(depotMap[k]*100)/100};});
+    // Derive depot_cg from cross array filtered by type
+    var dctSrc=(a.depot_cg_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    var cgMap={};dctSrc.forEach(function(r){var k=r.depot+'|'+r.costGroup;cgMap[k]=(cgMap[k]||0)+r.total;});
+    a.depot_cg=Object.keys(cgMap).sort().map(function(k){var p=k.split('|');return{depot:p[0],costGroup:p[1],total:Math.round(cgMap[k]*100)/100};});
+    // Derive depot_recharge from cross array filtered by type
+    var drtSrc=(a.depot_rc_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    var rcMap={};drtSrc.forEach(function(r){if(r.recharge==='Y')rcMap[r.depot]=(rcMap[r.depot]||0)+r.total;});
+    a.depot_recharge=Object.keys(rcMap).map(function(k){return{depot:k,recharge_total:Math.round(rcMap[k]*100)/100};});
+    // Derive monthly_depot from depot_monthly_type summed across types
+    var mdMap={};(a.depot_monthly_type||[]).forEach(function(r){var k=r.month+'|'+r.depot;mdMap[k]=(mdMap[k]||0)+r.total;});
+    a.monthly_depot=Object.keys(mdMap).sort().map(function(k){var p=k.split('|');return{month:p[0],depot:p[1],total:Math.round(mdMap[k]*100)/100};});
+    // Re-derive monthly_cg from depot_monthly_cg filtered by type
+    var dmcgSrc=(a.depot_monthly_cg||[]);
+    // depot_monthly_cg doesn't have type dimension - use depot_monthly_type x depot_cg_type approximation
+    // Simplest correct approach: re-derive from depot_cg_type filtered by type
+    var dctFiltered=(a.depot_cg_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    var dmcgMap={};dctFiltered.forEach(function(r){var k=r.depot+'|'+r.costGroup;dmcgMap[k]=(dmcgMap[k]||0)+r.total;});
+    a.depot_cg=Object.keys(dmcgMap).sort().map(function(k){var p=k.split('|');return{depot:p[0],costGroup:p[1],total:Math.round(dmcgMap[k]*100)/100};});
+    // For monthly breakdown filtered by type, build from depot_monthly_type x by period
+    // Use depot_monthly_type summed per period+depot as proxy (actual monthly_cg by type needs a 4D array)
+    // Recompute totals
+    a.grand_total   =Math.round(a.by_depot.reduce(function(s,r){return s+r.total;},0)*100)/100;
+    a.recharge_total=Math.round(a.depot_recharge.reduce(function(s,r){return s+r.recharge_total;},0)*100)/100;
+    // Jobs filtered by type
+    var jbtSrc=(a.depot_jobs_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;});
+    var jobDepotMap={};jbtSrc.forEach(function(r){jobDepotMap[r.depot]=(jobDepotMap[r.depot]||0)+r.jobs;});
+    a.total_jobs=Object.values(jobDepotMap).reduce(function(s,v){return s+v;},0);
+    a.depot_jobs=(a.depot_jobs_month_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;})
+      .reduce(function(acc,r){var k=r.month+'|'+r.depot;var ex=acc.find(function(x){return x.month===r.month&&x.depot===r.depot;});if(ex)ex.jobs+=r.jobs;else acc.push({month:r.month,depot:r.depot,jobs:r.jobs});return acc;},[]);
+    a.depot_jobs_week=(a.depot_jobs_week_type||[]).filter(function(r){return f.Ts.indexOf(r.type)!==-1;})
+      .reduce(function(acc,r){var ex=acc.find(function(x){return x.week===r.week&&x.depot===r.depot;});if(ex)ex.jobs+=r.jobs;else acc.push({week:r.week,depot:r.depot,jobs:r.jobs});return acc;},[]);
+  }
+
+  // ── Cost Group filter ───────────────────────────────────────────────────────
+  if(f.Gs&&f.Gs.length){
+    a.depot_cg=(a.depot_cg||[]).filter(function(r){return f.Gs.indexOf(r.costGroup)!==-1;});
+  }
+
+  // Attach depot_asset filtered by depot
+  a.depot_asset=f.D?fullAssets.filter(function(r){return r.depot===f.D;}):fullAssets;
+  return a;
+}
+
+
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHART CONFIG + GLOBALS
+// ═══════════════════════════════════════════════════════════════════════════
+var CG_COLORS={MATL:'#f0a500',OTHER:'#e05a2b',INTLBR:'#3b82f6',SUBLAB:'#10b981',TYRE:'#a78bfa',LABHIRE:'#f472b6',HIRE:'#38bdf8',WS:'#6b7280'};
+var TYPE_COLORS={Repair:'#f0a500',Service:'#3b82f6',tyre:'#a78bfa',Breakdown:'#e05a2b',other:'#6b7280'};
+var PALETTE=['#f0a500','#e05a2b','#3b82f6','#10b981','#a78bfa','#f472b6','#38bdf8','#facc15','#fb923c','#4ade80'];
+var DC=['#f0a500','#3b82f6','#10b981','#e05a2b','#a78bfa','#f472b6','#38bdf8'];
+Chart.defaults.color='#6b7280';Chart.defaults.borderColor='#252a38';
+Chart.defaults.font.family="'DM Mono',monospace";Chart.defaults.font.size=11;
+var charts={};
+
+// Seed data
+var OV_SEED={"monthly_total":[{"month":"2025-01","total":334068.28},{"month":"2025-02","total":395701.3},{"month":"2025-03","total":316241.09},{"month":"2025-04","total":266810.18},{"month":"2025-05","total":408521.46},{"month":"2025-06","total":307614.61},{"month":"2025-07","total":313289.58},{"month":"2025-08","total":387349.73},{"month":"2025-09","total":326739.96},{"month":"2025-10","total":543896.91},{"month":"2025-11","total":273723.75},{"month":"2025-12","total":319751.56}],"monthly_cg":[{"month":"2025-01","costGroup":"HIRE","total":0.0},{"month":"2025-01","costGroup":"INTLBR","total":42894.9},{"month":"2025-01","costGroup":"LABHIRE","total":13522.5},{"month":"2025-01","costGroup":"MATL","total":128453.07},{"month":"2025-01","costGroup":"OTHER","total":97337.57},{"month":"2025-01","costGroup":"SUBLAB","total":51309.09},{"month":"2025-01","costGroup":"WS","total":551.15},{"month":"2025-02","costGroup":"HIRE","total":375.0},{"month":"2025-02","costGroup":"INTLBR","total":40370.25},{"month":"2025-02","costGroup":"LABHIRE","total":9262.5},{"month":"2025-02","costGroup":"MATL","total":159850.38},{"month":"2025-02","costGroup":"OTHER","total":143993.33},{"month":"2025-02","costGroup":"SUBLAB","total":41037.34},{"month":"2025-02","costGroup":"WS","total":812.5},{"month":"2025-03","costGroup":"HIRE","total":525.0},{"month":"2025-03","costGroup":"INTLBR","total":43758.75},{"month":"2025-03","costGroup":"LABHIRE","total":3752.5},{"month":"2025-03","costGroup":"MATL","total":139184.31},{"month":"2025-03","costGroup":"OTHER","total":78999.47},{"month":"2025-03","costGroup":"SUBLAB","total":49940.7},{"month":"2025-03","costGroup":"WS","total":80.36},{"month":"2025-04","costGroup":"HIRE","total":7856.25},{"month":"2025-04","costGroup":"INTLBR","total":36289.5},{"month":"2025-04","costGroup":"LABHIRE","total":4543.75},{"month":"2025-04","costGroup":"MATL","total":121669.08},{"month":"2025-04","costGroup":"OTHER","total":56190.21},{"month":"2025-04","costGroup":"SUBLAB","total":39704.19},{"month":"2025-04","costGroup":"TYRE","total":479.2},{"month":"2025-04","costGroup":"WS","total":78.0},{"month":"2025-05","costGroup":"HIRE","total":11104.5},{"month":"2025-05","costGroup":"INTLBR","total":37369.5},{"month":"2025-05","costGroup":"LABHIRE","total":4461.25},{"month":"2025-05","costGroup":"MATL","total":184840.95},{"month":"2025-05","costGroup":"OTHER","total":127922.35},{"month":"2025-05","costGroup":"SUBLAB","total":41967.34},{"month":"2025-05","costGroup":"TYRE","total":475.3},{"month":"2025-05","costGroup":"WS","total":380.27},{"month":"2025-06","costGroup":"HIRE","total":4987.5},{"month":"2025-06","costGroup":"INTLBR","total":44682.75},{"month":"2025-06","costGroup":"LABHIRE","total":4143.75},{"month":"2025-06","costGroup":"MATL","total":115768.0},{"month":"2025-06","costGroup":"OTHER","total":83407.58},{"month":"2025-06","costGroup":"SUBLAB","total":44360.57},{"month":"2025-06","costGroup":"TYRE","total":9369.3},{"month":"2025-06","costGroup":"WS","total":895.16},{"month":"2025-07","costGroup":"HIRE","total":1443.75},{"month":"2025-07","costGroup":"INTLBR","total":59458.5},{"month":"2025-07","costGroup":"LABHIRE","total":6026.25},{"month":"2025-07","costGroup":"MATL","total":84395.74},{"month":"2025-07","costGroup":"OTHER","total":110241.42},{"month":"2025-07","costGroup":"SUBLAB","total":26923.37},{"month":"2025-07","costGroup":"TYRE","total":24800.55},{"month":"2025-07","costGroup":"WS","total":0.0},{"month":"2025-08","costGroup":"HIRE","total":412.5},{"month":"2025-08","costGroup":"INTLBR","total":50794.5},{"month":"2025-08","costGroup":"LABHIRE","total":19445.0},{"month":"2025-08","costGroup":"MATL","total":112786.0},{"month":"2025-08","costGroup":"OTHER","total":94820.11},{"month":"2025-08","costGroup":"SUBLAB","total":70348.27},{"month":"2025-08","costGroup":"TYRE","total":38606.35},{"month":"2025-08","costGroup":"WS","total":137.0},{"month":"2025-09","costGroup":"HIRE","total":0.0},{"month":"2025-09","costGroup":"INTLBR","total":54684.0},{"month":"2025-09","costGroup":"LABHIRE","total":8916.25},{"month":"2025-09","costGroup":"MATL","total":97023.64},{"month":"2025-09","costGroup":"OTHER","total":75465.44},{"month":"2025-09","costGroup":"SUBLAB","total":29808.6},{"month":"2025-09","costGroup":"TYRE","total":60525.02},{"month":"2025-09","costGroup":"WS","total":317.01},{"month":"2025-10","costGroup":"HIRE","total":450.0},{"month":"2025-10","costGroup":"INTLBR","total":84360.75},{"month":"2025-10","costGroup":"LABHIRE","total":12172.5},{"month":"2025-10","costGroup":"MATL","total":158188.73},{"month":"2025-10","costGroup":"OTHER","total":167761.83},{"month":"2025-10","costGroup":"SUBLAB","total":56963.5},{"month":"2025-10","costGroup":"TYRE","total":63864.96},{"month":"2025-10","costGroup":"WS","total":134.64},{"month":"2025-11","costGroup":"HIRE","total":562.5},{"month":"2025-11","costGroup":"INTLBR","total":40596.75},{"month":"2025-11","costGroup":"LABHIRE","total":2872.5},{"month":"2025-11","costGroup":"MATL","total":72829.2},{"month":"2025-11","costGroup":"OTHER","total":67845.79},{"month":"2025-11","costGroup":"SUBLAB","total":35117.5},{"month":"2025-11","costGroup":"TYRE","total":53152.6},{"month":"2025-11","costGroup":"WS","total":746.91},{"month":"2025-12","costGroup":"HIRE","total":339.0},{"month":"2025-12","costGroup":"INTLBR","total":46674.0},{"month":"2025-12","costGroup":"LABHIRE","total":7936.25},{"month":"2025-12","costGroup":"MATL","total":86814.9},{"month":"2025-12","costGroup":"OTHER","total":90485.67},{"month":"2025-12","costGroup":"SUBLAB","total":30894.28},{"month":"2025-12","costGroup":"TYRE","total":55947.6},{"month":"2025-12","costGroup":"WS","total":659.86}],"monthly_type":[{"month":"2025-01","type":"Breakdown","total":13524.86},{"month":"2025-01","type":"Repair","total":204521.88},{"month":"2025-01","type":"Service","total":66154.55},{"month":"2025-01","type":"other","total":8543.2},{"month":"2025-01","type":"tyre","total":41323.79},{"month":"2025-02","type":"Breakdown","total":4989.89},{"month":"2025-02","type":"Repair","total":240350.24},{"month":"2025-02","type":"Service","total":91619.63},{"month":"2025-02","type":"other","total":2946.69},{"month":"2025-02","type":"tyre","total":55794.85},{"month":"2025-03","type":"Breakdown","total":6455.05},{"month":"2025-03","type":"Repair","total":182008.15},{"month":"2025-03","type":"Service","total":65283.4},{"month":"2025-03","type":"other","total":9348.64},{"month":"2025-03","type":"tyre","total":53145.85},{"month":"2025-04","type":"Breakdown","total":7680.1},{"month":"2025-04","type":"Repair","total":136304.92},{"month":"2025-04","type":"Service","total":56819.67},{"month":"2025-04","type":"other","total":8902.32},{"month":"2025-04","type":"tyre","total":57103.17},{"month":"2025-05","type":"Breakdown","total":3914.4},{"month":"2025-05","type":"Repair","total":226410.44},{"month":"2025-05","type":"Service","total":88844.72},{"month":"2025-05","type":"other","total":6345.49},{"month":"2025-05","type":"tyre","total":83006.41},{"month":"2025-06","type":"Breakdown","total":6009.9},{"month":"2025-06","type":"Repair","total":191978.49},{"month":"2025-06","type":"Service","total":67991.24},{"month":"2025-06","type":"other","total":4943.18},{"month":"2025-06","type":"tyre","total":36691.8},{"month":"2025-07","type":"Breakdown","total":5846.3},{"month":"2025-07","type":"Repair","total":233609.35},{"month":"2025-07","type":"Service","total":46125.12},{"month":"2025-07","type":"other","total":836.0},{"month":"2025-07","type":"tyre","total":26872.81},{"month":"2025-08","type":"Breakdown","total":5485.25},{"month":"2025-08","type":"Repair","total":272146.5},{"month":"2025-08","type":"Service","total":68646.26},{"month":"2025-08","type":"other","total":4609.37},{"month":"2025-08","type":"tyre","total":36462.35},{"month":"2025-09","type":"Breakdown","total":2242.07},{"month":"2025-09","type":"Repair","total":194933.12},{"month":"2025-09","type":"Service","total":68473.75},{"month":"2025-09","type":"other","total":3150.59},{"month":"2025-09","type":"tyre","total":57940.43},{"month":"2025-10","type":"Breakdown","total":6693.54},{"month":"2025-10","type":"Repair","total":396436.55},{"month":"2025-10","type":"Service","total":74374.04},{"month":"2025-10","type":"other","total":6448.98},{"month":"2025-10","type":"tyre","total":59943.8},{"month":"2025-11","type":"Breakdown","total":4834.76},{"month":"2025-11","type":"Repair","total":149776.79},{"month":"2025-11","type":"Service","total":60740.15},{"month":"2025-11","type":"other","total":5360.1},{"month":"2025-11","type":"tyre","total":53011.95},{"month":"2025-12","type":"Breakdown","total":6999.6},{"month":"2025-12","type":"Repair","total":209502.21},{"month":"2025-12","type":"Service","total":42163.89},{"month":"2025-12","type":"other","total":5016.47},{"month":"2025-12","type":"tyre","total":56069.39}],"by_type":[{"type":"Breakdown","total":74675.72},{"type":"Repair","total":2637978.64},{"type":"Service","total":797236.42},{"type":"other","total":66451.03},{"type":"tyre","total":617366.6}],"by_cg":[{"costGroup":"HIRE","total":28056.0},{"costGroup":"INTLBR","total":581934.15},{"costGroup":"LABHIRE","total":97055.0},{"costGroup":"MATL","total":1461804.0},{"costGroup":"OTHER","total":1194470.77},{"costGroup":"SUBLAB","total":518374.75},{"costGroup":"TYRE","total":307220.88},{"costGroup":"WS","total":4792.86}],"by_recharge":[{"recharge":"N","total":4049078.58},{"recharge":"Y","total":144629.83}],"jobs_month":[{"month":"2025-01","jobs":366},{"month":"2025-02","jobs":372},{"month":"2025-03","jobs":343},{"month":"2025-04","jobs":333},{"month":"2025-05","jobs":366},{"month":"2025-06","jobs":378},{"month":"2025-07","jobs":280},{"month":"2025-08","jobs":362},{"month":"2025-09","jobs":317},{"month":"2025-10","jobs":399},{"month":"2025-11","jobs":305},{"month":"2025-12","jobs":335}],"by_asset_type":[{"itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1562492.73},{"itemDesc":"TAUTLINER FLAT TOP 45FT","total":897288.74},{"itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":340164.55},{"itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":318973.14},{"itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":293570.48},{"itemDesc":"SKEL TIPPING TRI AXLE","total":204329.65},{"itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":158399.64},{"itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":125639.39},{"itemDesc":"END TIPPER RINGFEDER","total":94495.18},{"itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":53862.19},{"itemDesc":"AUXILIARY ENGINE","total":26130.7},{"itemDesc":"TAUTLINER DROP DECK 45FT","total":24907.31},{"itemDesc":"DAYSWORTH TERMINAL TRACTOR LOW ROOF","total":17512.11},{"itemDesc":"SINO TERMINAL TRACTOR LOW ROOF","total":13493.82},{"itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF EURO II","total":12497.05},{"itemDesc":"TAUTLINER DROP DECK 45FT MEZZ LOAD/RES","total":7898.45},{"itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA (INGLEBURN)","total":7537.21},{"itemDesc":"TERMINAL TRACTOR HIGH ROOF DAYSWORTH","total":7127.75},{"itemDesc":"TAUTLINER DROP DECK 45FT LOAD RESTRAINT","total":6840.57},{"itemDesc":"AUXILIARY ENGINE VANGUARD PETROL 23HP","total":6833.51},{"itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF (MINTO)","total":6655.98},{"itemDesc":"SPEEDYWASH","total":2726.0},{"itemDesc":"REFRIGERATED TAUTLINER STANDARD HEIGHT TRI","total":2193.69},{"itemDesc":"TERMINAL TRACTOR KALMAR","total":902.8},{"itemDesc":"MOBILE TRUCK WASH","total":710.36},{"itemDesc":"AUXILIARY ENGINES","total":450.41},{"itemDesc":"MOBILE TRUCK WASH (INGELBURN)","total":75.0}],"by_asset":[{"itemNo":"TP101","itemDesc":"END TIPPER RINGFEDER","total":87413.04},{"itemNo":"TT067","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":49770.53},{"itemNo":"TT124","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":48192.7},{"itemNo":"TT085","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":47156.75},{"itemNo":"TT068","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":36908.9},{"itemNo":"TT125","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":36733.12},{"itemNo":"TT086","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":31860.92},{"itemNo":"TT032","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":31763.13},{"itemNo":"TL274","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":28803.72},{"itemNo":"TT035","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":28239.4},{"itemNo":"TT080","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":28195.73},{"itemNo":"TL442","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":27379.16},{"itemNo":"TL142","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":25903.22},{"itemNo":"TT087","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":24790.33},{"itemNo":"TL496","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":24734.73},{"itemNo":"TT008","itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":23987.45},{"itemNo":"TL207","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":23270.34},{"itemNo":"TT071","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":23137.18},{"itemNo":"TT058","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":22979.0},{"itemNo":"TT126","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":22525.55},{"itemNo":"TL444","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":21808.76},{"itemNo":"TS030","itemDesc":"SKEL TIPPING TRI AXLE","total":21726.73},{"itemNo":"TL152","itemDesc":"TAUTLINER FLAT TOP 45FT","total":21633.85},{"itemNo":"TL083","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":21426.37},{"itemNo":"TT029","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":20866.83},{"itemNo":"TL275","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":20504.65},{"itemNo":"TT031","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":19988.77},{"itemNo":"TS021","itemDesc":"SKEL TIPPING TRI AXLE","total":19885.09},{"itemNo":"TL101","itemDesc":"TAUTLINER FLAT TOP 45FT","total":19818.56},{"itemNo":"TT062","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":19478.71}],"grand_total":4193708.41,"recharge_total":144629.83,"total_jobs":4156,"total_rows":18783,"date_range":["2025-01-02","2025-12-31"],"cost_groups":["HIRE","INTLBR","LABHIRE","MATL","OTHER","SUBLAB","TYRE","WS"],"types":["Breakdown","Repair","Service","other","tyre"],"assets":["AUXILIARY ENGINE","AUXILIARY ENGINE VANGUARD PETROL 23HP","AUXILIARY ENGINES","DAYSWORTH TERMINAL TRACTOR LOW ROOF","END TIPPER RINGFEDER","MOBILE TRUCK WASH","MOBILE TRUCK WASH (INGELBURN)","REFRIGERATED TAUTLINER STANDARD HEIGHT TRI","SINO TERMINAL TRACTOR HIGH ROOF","SINO TERMINAL TRACTOR HIGH ROOF (MINTO)","SINO TERMINAL TRACTOR HIGH ROOF EURO II","SINO TERMINAL TRACTOR LOW ROOF","SKEL TIPPING TRI AXLE","SPEEDYWASH","TAUTLINER DROP DECK 45FT","TAUTLINER DROP DECK 45FT LOAD RESTRAINT","TAUTLINER DROP DECK 45FT MEZZ","TAUTLINER DROP DECK 45FT MEZZ LOAD/RES","TAUTLINER FLAT TOP 45FT","TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","TERBERG TERMINAL TRACTOR LOW ROOF","TERMINAL TRACTOR HIGH ROOF DAYSWORTH","TERMINAL TRACTOR HIGH ROOF KALMAR","TERMINAL TRACTOR HIGH ROOF OTTAWA","TERMINAL TRACTOR HIGH ROOF OTTAWA (INGLEBURN)","TERMINAL TRACTOR HIGH ROOF TERBERG","TERMINAL TRACTOR KALMAR"],"depots":["2","3","4","5","6","7","9"]};
+var DP_SEED={"by_depot":[{"depot":"2","total":545628.01},{"depot":"3","total":996438.48},{"depot":"4","total":289790.39},{"depot":"5","total":1233333.6},{"depot":"6","total":986833.96},{"depot":"7","total":31592.63},{"depot":"9","total":110091.34}],"monthly_depot":[{"month":"2025-01","depot":"2","total":48950.1},{"month":"2025-01","depot":"3","total":70839.16},{"month":"2025-01","depot":"4","total":13017.49},{"month":"2025-01","depot":"5","total":87588.19},{"month":"2025-01","depot":"6","total":100871.04},{"month":"2025-01","depot":"7","total":242.2},{"month":"2025-01","depot":"9","total":12560.1},{"month":"2025-02","depot":"2","total":32673.64},{"month":"2025-02","depot":"3","total":76362.31},{"month":"2025-02","depot":"4","total":54043.31},{"month":"2025-02","depot":"5","total":145924.19},{"month":"2025-02","depot":"6","total":73075.11},{"month":"2025-02","depot":"7","total":5531.01},{"month":"2025-02","depot":"9","total":8091.73},{"month":"2025-03","depot":"2","total":39067.88},{"month":"2025-03","depot":"3","total":74859.89},{"month":"2025-03","depot":"4","total":29318.84},{"month":"2025-03","depot":"5","total":79754.22},{"month":"2025-03","depot":"6","total":82081.97},{"month":"2025-03","depot":"7","total":4431.36},{"month":"2025-03","depot":"9","total":6726.93},{"month":"2025-04","depot":"2","total":53224.73},{"month":"2025-04","depot":"3","total":51399.43},{"month":"2025-04","depot":"4","total":17525.54},{"month":"2025-04","depot":"5","total":67077.24},{"month":"2025-04","depot":"6","total":66539.05},{"month":"2025-04","depot":"7","total":1300.6},{"month":"2025-04","depot":"9","total":9743.59},{"month":"2025-05","depot":"2","total":33345.61},{"month":"2025-05","depot":"3","total":99076.17},{"month":"2025-05","depot":"4","total":39883.45},{"month":"2025-05","depot":"5","total":139204.87},{"month":"2025-05","depot":"6","total":82196.82},{"month":"2025-05","depot":"7","total":1644.14},{"month":"2025-05","depot":"9","total":13170.4},{"month":"2025-06","depot":"2","total":30054.82},{"month":"2025-06","depot":"3","total":95478.39},{"month":"2025-06","depot":"4","total":12530.57},{"month":"2025-06","depot":"5","total":110920.98},{"month":"2025-06","depot":"6","total":53394.84},{"month":"2025-06","depot":"7","total":856.09},{"month":"2025-06","depot":"9","total":4378.92},{"month":"2025-07","depot":"2","total":103846.2},{"month":"2025-07","depot":"3","total":50496.44},{"month":"2025-07","depot":"4","total":14627.21},{"month":"2025-07","depot":"5","total":65185.95},{"month":"2025-07","depot":"6","total":71911.38},{"month":"2025-07","depot":"7","total":1500.9},{"month":"2025-07","depot":"9","total":5721.5},{"month":"2025-08","depot":"2","total":27767.38},{"month":"2025-08","depot":"3","total":107045.34},{"month":"2025-08","depot":"4","total":20651.16},{"month":"2025-08","depot":"5","total":155367.54},{"month":"2025-08","depot":"6","total":52526.59},{"month":"2025-08","depot":"7","total":4150.64},{"month":"2025-08","depot":"9","total":19841.08},{"month":"2025-09","depot":"2","total":32145.6},{"month":"2025-09","depot":"3","total":88530.02},{"month":"2025-09","depot":"4","total":27131.87},{"month":"2025-09","depot":"5","total":76171.57},{"month":"2025-09","depot":"6","total":86862.12},{"month":"2025-09","depot":"7","total":5347.64},{"month":"2025-09","depot":"9","total":10551.14},{"month":"2025-10","depot":"2","total":66278.73},{"month":"2025-10","depot":"3","total":138842.24},{"month":"2025-10","depot":"4","total":28399.66},{"month":"2025-10","depot":"5","total":104986.84},{"month":"2025-10","depot":"6","total":195019.24},{"month":"2025-10","depot":"7","total":1698.23},{"month":"2025-10","depot":"9","total":8671.97},{"month":"2025-11","depot":"2","total":48261.56},{"month":"2025-11","depot":"3","total":63088.38},{"month":"2025-11","depot":"4","total":11862.92},{"month":"2025-11","depot":"5","total":97582.25},{"month":"2025-11","depot":"6","total":46486.25},{"month":"2025-11","depot":"7","total":603.2},{"month":"2025-11","depot":"9","total":5839.19},{"month":"2025-12","depot":"2","total":30011.76},{"month":"2025-12","depot":"3","total":80420.71},{"month":"2025-12","depot":"4","total":20798.37},{"month":"2025-12","depot":"5","total":103569.76},{"month":"2025-12","depot":"6","total":75869.55},{"month":"2025-12","depot":"7","total":4286.62},{"month":"2025-12","depot":"9","total":4794.79}],"depot_cg":[{"depot":"2","costGroup":"HIRE","total":7389.0},{"depot":"2","costGroup":"INTLBR","total":148416.75},{"depot":"2","costGroup":"LABHIRE","total":23031.25},{"depot":"2","costGroup":"MATL","total":180242.79},{"depot":"2","costGroup":"OTHER","total":117257.44},{"depot":"2","costGroup":"SUBLAB","total":41893.03},{"depot":"2","costGroup":"TYRE","total":27397.75},{"depot":"3","costGroup":"HIRE","total":1298.25},{"depot":"3","costGroup":"INTLBR","total":87755.0},{"depot":"3","costGroup":"LABHIRE","total":26581.25},{"depot":"3","costGroup":"MATL","total":285816.38},{"depot":"3","costGroup":"OTHER","total":323398.7},{"depot":"3","costGroup":"SUBLAB","total":178249.0},{"depot":"3","costGroup":"TYRE","total":93339.9},{"depot":"4","costGroup":"MATL","total":109740.82},{"depot":"4","costGroup":"OTHER","total":97107.62},{"depot":"4","costGroup":"SUBLAB","total":60252.5},{"depot":"4","costGroup":"TYRE","total":22689.45},{"depot":"5","costGroup":"HIRE","total":19162.5},{"depot":"5","costGroup":"INTLBR","total":59635.0},{"depot":"5","costGroup":"MATL","total":471709.8},{"depot":"5","costGroup":"OTHER","total":404961.0},{"depot":"5","costGroup":"SUBLAB","total":214976.86},{"depot":"5","costGroup":"TYRE","total":58339.33},{"depot":"5","costGroup":"WS","total":4549.11},{"depot":"6","costGroup":"HIRE","total":206.25},{"depot":"6","costGroup":"INTLBR","total":281065.4},{"depot":"6","costGroup":"LABHIRE","total":42202.5},{"depot":"6","costGroup":"MATL","total":361405.23},{"depot":"6","costGroup":"OTHER","total":211581.78},{"depot":"6","costGroup":"SUBLAB","total":130.0},{"depot":"6","costGroup":"TYRE","total":89999.05},{"depot":"6","costGroup":"WS","total":243.75},{"depot":"7","costGroup":"HIRE","total":0.0},{"depot":"7","costGroup":"INTLBR","total":4987.0},{"depot":"7","costGroup":"LABHIRE","total":5240.0},{"depot":"7","costGroup":"MATL","total":13542.68},{"depot":"7","costGroup":"OTHER","total":893.0},{"depot":"7","costGroup":"SUBLAB","total":354.75},{"depot":"7","costGroup":"TYRE","total":6575.2},{"depot":"9","costGroup":"INTLBR","total":75.0},{"depot":"9","costGroup":"MATL","total":39346.3},{"depot":"9","costGroup":"OTHER","total":39271.23},{"depot":"9","costGroup":"SUBLAB","total":22518.61},{"depot":"9","costGroup":"TYRE","total":8880.2}],"depot_type":[{"depot":"2","type":"Breakdown","total":8149.27},{"depot":"2","type":"Repair","total":404990.9},{"depot":"2","type":"Service","total":71850.51},{"depot":"2","type":"other","total":1015.4},{"depot":"2","type":"tyre","total":59621.93},{"depot":"3","type":"Breakdown","total":40294.67},{"depot":"3","type":"Repair","total":551440.81},{"depot":"3","type":"Service","total":203036.52},{"depot":"3","type":"other","total":17934.76},{"depot":"3","type":"tyre","total":183731.72},{"depot":"4","type":"Breakdown","total":7961.44},{"depot":"4","type":"Repair","total":108964.96},{"depot":"4","type":"Service","total":126388.11},{"depot":"4","type":"tyre","total":46475.88},{"depot":"5","type":"Repair","total":891283.72},{"depot":"5","type":"Service","total":201957.47},{"depot":"5","type":"other","total":24358.63},{"depot":"5","type":"tyre","total":115733.78},{"depot":"6","type":"Breakdown","total":16825.9},{"depot":"6","type":"Repair","total":628505.9},{"depot":"6","type":"Service","total":150418.53},{"depot":"6","type":"other","total":17509.14},{"depot":"6","type":"tyre","total":173574.49},{"depot":"7","type":"Breakdown","total":692.95},{"depot":"7","type":"Repair","total":6138.67},{"depot":"7","type":"Service","total":3191.51},{"depot":"7","type":"other","total":5633.1},{"depot":"7","type":"tyre","total":15936.4},{"depot":"9","type":"Breakdown","total":751.49},{"depot":"9","type":"Repair","total":46653.68},{"depot":"9","type":"Service","total":40393.77},{"depot":"9","type":"tyre","total":22292.4}],"depot_monthly_type":[{"depot":"2","month":"2025-01","type":"Breakdown","total":1286.5},{"depot":"2","month":"2025-01","type":"Repair","total":38269.99},{"depot":"2","month":"2025-01","type":"Service","total":4376.11},{"depot":"2","month":"2025-01","type":"tyre","total":5017.5},{"depot":"2","month":"2025-02","type":"Breakdown","total":755.63},{"depot":"2","month":"2025-02","type":"Repair","total":21815.51},{"depot":"2","month":"2025-02","type":"Service","total":7952.35},{"depot":"2","month":"2025-02","type":"tyre","total":2150.15},{"depot":"2","month":"2025-03","type":"Repair","total":27260.36},{"depot":"2","month":"2025-03","type":"Service","total":5992.92},{"depot":"2","month":"2025-03","type":"tyre","total":5814.6},{"depot":"2","month":"2025-04","type":"Breakdown","total":1372.31},{"depot":"2","month":"2025-04","type":"Repair","total":35766.5},{"depot":"2","month":"2025-04","type":"Service","total":7278.92},{"depot":"2","month":"2025-04","type":"tyre","total":8807.0},{"depot":"2","month":"2025-05","type":"Breakdown","total":450.0},{"depot":"2","month":"2025-05","type":"Repair","total":19556.83},{"depot":"2","month":"2025-05","type":"Service","total":2100.9},{"depot":"2","month":"2025-05","type":"tyre","total":11237.88},{"depot":"2","month":"2025-06","type":"Breakdown","total":810.5},{"depot":"2","month":"2025-06","type":"Repair","total":21496.83},{"depot":"2","month":"2025-06","type":"Service","total":6511.09},{"depot":"2","month":"2025-06","type":"tyre","total":1236.4},{"depot":"2","month":"2025-07","type":"Breakdown","total":403.98},{"depot":"2","month":"2025-07","type":"Repair","total":96159.34},{"depot":"2","month":"2025-07","type":"Service","total":3720.98},{"depot":"2","month":"2025-07","type":"tyre","total":3561.9},{"depot":"2","month":"2025-08","type":"Breakdown","total":728.0},{"depot":"2","month":"2025-08","type":"Repair","total":15641.8},{"depot":"2","month":"2025-08","type":"Service","total":7364.98},{"depot":"2","month":"2025-08","type":"tyre","total":4032.6},{"depot":"2","month":"2025-09","type":"Repair","total":20068.45},{"depot":"2","month":"2025-09","type":"Service","total":8367.55},{"depot":"2","month":"2025-09","type":"tyre","total":3709.6},{"depot":"2","month":"2025-10","type":"Breakdown","total":187.5},{"depot":"2","month":"2025-10","type":"Repair","total":50610.81},{"depot":"2","month":"2025-10","type":"Service","total":7237.97},{"depot":"2","month":"2025-10","type":"other","total":1015.4},{"depot":"2","month":"2025-10","type":"tyre","total":7227.05},{"depot":"2","month":"2025-11","type":"Breakdown","total":679.87},{"depot":"2","month":"2025-11","type":"Repair","total":37557.99},{"depot":"2","month":"2025-11","type":"Service","total":6679.0},{"depot":"2","month":"2025-11","type":"tyre","total":3344.7},{"depot":"2","month":"2025-12","type":"Breakdown","total":1474.98},{"depot":"2","month":"2025-12","type":"Repair","total":20786.49},{"depot":"2","month":"2025-12","type":"Service","total":4267.74},{"depot":"2","month":"2025-12","type":"tyre","total":3482.55},{"depot":"3","month":"2025-01","type":"Breakdown","total":9974.23},{"depot":"3","month":"2025-01","type":"Repair","total":29822.64},{"depot":"3","month":"2025-01","type":"Service","total":15144.12},{"depot":"3","month":"2025-01","type":"other","total":5676.77},{"depot":"3","month":"2025-01","type":"tyre","total":10221.4},{"depot":"3","month":"2025-02","type":"Breakdown","total":760.97},{"depot":"3","month":"2025-02","type":"Repair","total":39446.93},{"depot":"3","month":"2025-02","type":"Service","total":20273.16},{"depot":"3","month":"2025-02","type":"other","total":271.25},{"depot":"3","month":"2025-02","type":"tyre","total":15610.0},{"depot":"3","month":"2025-03","type":"Breakdown","total":6315.05},{"depot":"3","month":"2025-03","type":"Repair","total":34045.53},{"depot":"3","month":"2025-03","type":"Service","total":17466.51},{"depot":"3","month":"2025-03","type":"other","total":375.0},{"depot":"3","month":"2025-03","type":"tyre","total":16657.8},{"depot":"3","month":"2025-04","type":"Breakdown","total":4898.9},{"depot":"3","month":"2025-04","type":"Repair","total":18546.63},{"depot":"3","month":"2025-04","type":"Service","total":14356.01},{"depot":"3","month":"2025-04","type":"other","total":4212.6},{"depot":"3","month":"2025-04","type":"tyre","total":9385.29},{"depot":"3","month":"2025-05","type":"Breakdown","total":1557.16},{"depot":"3","month":"2025-05","type":"Repair","total":32284.51},{"depot":"3","month":"2025-05","type":"Service","total":27627.83},{"depot":"3","month":"2025-05","type":"other","total":752.74},{"depot":"3","month":"2025-05","type":"tyre","total":36853.93},{"depot":"3","month":"2025-06","type":"Breakdown","total":3346.72},{"depot":"3","month":"2025-06","type":"Repair","total":63913.41},{"depot":"3","month":"2025-06","type":"Service","total":16754.31},{"depot":"3","month":"2025-06","type":"other","total":431.25},{"depot":"3","month":"2025-06","type":"tyre","total":11032.7},{"depot":"3","month":"2025-07","type":"Breakdown","total":3110.01},{"depot":"3","month":"2025-07","type":"Repair","total":32838.94},{"depot":"3","month":"2025-07","type":"Service","total":13829.89},{"depot":"3","month":"2025-07","type":"tyre","total":717.6},{"depot":"3","month":"2025-08","type":"Breakdown","total":1922.12},{"depot":"3","month":"2025-08","type":"Repair","total":71311.86},{"depot":"3","month":"2025-08","type":"Service","total":14657.71},{"depot":"3","month":"2025-08","type":"other","total":2153.75},{"depot":"3","month":"2025-08","type":"tyre","total":16999.9},{"depot":"3","month":"2025-09","type":"Breakdown","total":1868.07},{"depot":"3","month":"2025-09","type":"Repair","total":54016.64},{"depot":"3","month":"2025-09","type":"Service","total":14306.36},{"depot":"3","month":"2025-09","type":"other","total":348.75},{"depot":"3","month":"2025-09","type":"tyre","total":17990.2},{"depot":"3","month":"2025-10","type":"Breakdown","total":835.1},{"depot":"3","month":"2025-10","type":"Repair","total":100396.48},{"depot":"3","month":"2025-10","type":"Service","total":24145.66},{"depot":"3","month":"2025-10","type":"other","total":2412.5},{"depot":"3","month":"2025-10","type":"tyre","total":11052.5},{"depot":"3","month":"2025-11","type":"Breakdown","total":2680.26},{"depot":"3","month":"2025-11","type":"Repair","total":27150.2},{"depot":"3","month":"2025-11","type":"Service","total":15124.92},{"depot":"3","month":"2025-11","type":"tyre","total":18133.0},{"depot":"3","month":"2025-12","type":"Breakdown","total":3026.08},{"depot":"3","month":"2025-12","type":"Repair","total":47667.04},{"depot":"3","month":"2025-12","type":"Service","total":9350.04},{"depot":"3","month":"2025-12","type":"other","total":1300.15},{"depot":"3","month":"2025-12","type":"tyre","total":19077.4},{"depot":"4","month":"2025-01","type":"Repair","total":3364.45},{"depot":"4","month":"2025-01","type":"Service","total":5844.59},{"depot":"4","month":"2025-01","type":"tyre","total":3808.45},{"depot":"4","month":"2025-02","type":"Breakdown","total":227.5},{"depot":"4","month":"2025-02","type":"Repair","total":37885.56},{"depot":"4","month":"2025-02","type":"Service","total":12300.25},{"depot":"4","month":"2025-02","type":"tyre","total":3630.0},{"depot":"4","month":"2025-03","type":"Repair","total":12759.4},{"depot":"4","month":"2025-03","type":"Service","total":11944.44},{"depot":"4","month":"2025-03","type":"tyre","total":4615.0},{"depot":"4","month":"2025-04","type":"Repair","total":3538.95},{"depot":"4","month":"2025-04","type":"Service","total":8184.16},{"depot":"4","month":"2025-04","type":"tyre","total":5802.43},{"depot":"4","month":"2025-05","type":"Repair","total":24587.7},{"depot":"4","month":"2025-05","type":"Service","total":12682.55},{"depot":"4","month":"2025-05","type":"tyre","total":2613.2},{"depot":"4","month":"2025-06","type":"Repair","total":120.0},{"depot":"4","month":"2025-06","type":"Service","total":9826.12},{"depot":"4","month":"2025-06","type":"tyre","total":2584.45},{"depot":"4","month":"2025-07","type":"Breakdown","total":1974.0},{"depot":"4","month":"2025-07","type":"Repair","total":1200.0},{"depot":"4","month":"2025-07","type":"Service","total":8738.75},{"depot":"4","month":"2025-07","type":"tyre","total":2714.46},{"depot":"4","month":"2025-08","type":"Repair","total":10612.74},{"depot":"4","month":"2025-08","type":"Service","total":8029.82},{"depot":"4","month":"2025-08","type":"tyre","total":2008.6},{"depot":"4","month":"2025-09","type":"Breakdown","total":239.0},{"depot":"4","month":"2025-09","type":"Repair","total":2763.95},{"depot":"4","month":"2025-09","type":"Service","total":18946.24},{"depot":"4","month":"2025-09","type":"tyre","total":5182.68},{"depot":"4","month":"2025-10","type":"Breakdown","total":5520.94},{"depot":"4","month":"2025-10","type":"Repair","total":2284.58},{"depot":"4","month":"2025-10","type":"Service","total":14913.29},{"depot":"4","month":"2025-10","type":"tyre","total":5680.85},{"depot":"4","month":"2025-11","type":"Repair","total":1214.98},{"depot":"4","month":"2025-11","type":"Service","total":6018.94},{"depot":"4","month":"2025-11","type":"tyre","total":4629.0},{"depot":"4","month":"2025-12","type":"Repair","total":8632.65},{"depot":"4","month":"2025-12","type":"Service","total":8958.96},{"depot":"4","month":"2025-12","type":"tyre","total":3206.76},{"depot":"5","month":"2025-01","type":"Repair","total":64387.43},{"depot":"5","month":"2025-01","type":"Service","total":17880.56},{"depot":"5","month":"2025-01","type":"tyre","total":5320.2},{"depot":"5","month":"2025-02","type":"Repair","total":96047.03},{"depot":"5","month":"2025-02","type":"Service","total":34353.01},{"depot":"5","month":"2025-02","type":"other","total":811.0},{"depot":"5","month":"2025-02","type":"tyre","total":14713.15},{"depot":"5","month":"2025-03","type":"Repair","total":51844.53},{"depot":"5","month":"2025-03","type":"Service","total":9023.7},{"depot":"5","month":"2025-03","type":"other","total":8192.84},{"depot":"5","month":"2025-03","type":"tyre","total":10693.15},{"depot":"5","month":"2025-04","type":"Repair","total":46383.54},{"depot":"5","month":"2025-04","type":"Service","total":12732.75},{"depot":"5","month":"2025-04","type":"other","total":911.0},{"depot":"5","month":"2025-04","type":"tyre","total":7049.95},{"depot":"5","month":"2025-05","type":"Repair","total":97419.74},{"depot":"5","month":"2025-05","type":"Service","total":29806.63},{"depot":"5","month":"2025-05","type":"other","total":1600.0},{"depot":"5","month":"2025-05","type":"tyre","total":10378.5},{"depot":"5","month":"2025-06","type":"Repair","total":72868.0},{"depot":"5","month":"2025-06","type":"Service","total":19228.85},{"depot":"5","month":"2025-06","type":"other","total":4080.68},{"depot":"5","month":"2025-06","type":"tyre","total":14743.45},{"depot":"5","month":"2025-07","type":"Repair","total":54673.79},{"depot":"5","month":"2025-07","type":"Service","total":4820.76},{"depot":"5","month":"2025-07","type":"other","total":611.0},{"depot":"5","month":"2025-07","type":"tyre","total":5080.4},{"depot":"5","month":"2025-08","type":"Repair","total":125226.58},{"depot":"5","month":"2025-08","type":"Service","total":22081.91},{"depot":"5","month":"2025-08","type":"other","total":2103.0},{"depot":"5","month":"2025-08","type":"tyre","total":5956.05},{"depot":"5","month":"2025-09","type":"Repair","total":55246.34},{"depot":"5","month":"2025-09","type":"Service","total":8433.33},{"depot":"5","month":"2025-09","type":"other","total":1130.0},{"depot":"5","month":"2025-09","type":"tyre","total":11361.9},{"depot":"5","month":"2025-10","type":"Repair","total":84287.01},{"depot":"5","month":"2025-10","type":"Service","total":10308.93},{"depot":"5","month":"2025-10","type":"other","total":1098.0},{"depot":"5","month":"2025-10","type":"tyre","total":9292.9},{"depot":"5","month":"2025-11","type":"Repair","total":59337.19},{"depot":"5","month":"2025-11","type":"Service","total":21346.59},{"depot":"5","month":"2025-11","type":"other","total":3722.02},{"depot":"5","month":"2025-11","type":"tyre","total":13176.45},{"depot":"5","month":"2025-12","type":"Repair","total":83562.54},{"depot":"5","month":"2025-12","type":"Service","total":11940.45},{"depot":"5","month":"2025-12","type":"other","total":99.09},{"depot":"5","month":"2025-12","type":"tyre","total":7967.68},{"depot":"6","month":"2025-01","type":"Breakdown","total":2264.13},{"depot":"6","month":"2025-01","type":"Repair","total":64170.06},{"depot":"6","month":"2025-01","type":"Service","total":17747.18},{"depot":"6","month":"2025-01","type":"other","total":2866.43},{"depot":"6","month":"2025-01","type":"tyre","total":13823.24},{"depot":"6","month":"2025-02","type":"Breakdown","total":2956.69},{"depot":"6","month":"2025-02","type":"Repair","total":40379.71},{"depot":"6","month":"2025-02","type":"Service","total":13381.42},{"depot":"6","month":"2025-02","type":"other","total":1864.44},{"depot":"6","month":"2025-02","type":"tyre","total":14492.85},{"depot":"6","month":"2025-03","type":"Repair","total":54039.27},{"depot":"6","month":"2025-03","type":"Service","total":17256.7},{"depot":"6","month":"2025-03","type":"other","total":780.8},{"depot":"6","month":"2025-03","type":"tyre","total":10005.2},{"depot":"6","month":"2025-04","type":"Breakdown","total":1408.89},{"depot":"6","month":"2025-04","type":"Repair","total":28773.68},{"depot":"6","month":"2025-04","type":"Service","total":12135.66},{"depot":"6","month":"2025-04","type":"other","total":3342.12},{"depot":"6","month":"2025-04","type":"tyre","total":20878.7},{"depot":"6","month":"2025-05","type":"Breakdown","total":1789.06},{"depot":"6","month":"2025-05","type":"Repair","total":46464.16},{"depot":"6","month":"2025-05","type":"Service","total":11775.89},{"depot":"6","month":"2025-05","type":"other","total":2348.61},{"depot":"6","month":"2025-05","type":"tyre","total":19819.1},{"depot":"6","month":"2025-06","type":"Breakdown","total":1852.68},{"depot":"6","month":"2025-06","type":"Repair","total":31789.45},{"depot":"6","month":"2025-06","type":"Service","total":12770.86},{"depot":"6","month":"2025-06","type":"other","total":431.25},{"depot":"6","month":"2025-06","type":"tyre","total":6550.6},{"depot":"6","month":"2025-07","type":"Repair","total":45975.25},{"depot":"6","month":"2025-07","type":"Service","total":13267.28},{"depot":"6","month":"2025-07","type":"other","total":225.0},{"depot":"6","month":"2025-07","type":"tyre","total":12443.85},{"depot":"6","month":"2025-08","type":"Breakdown","total":2431.28},{"depot":"6","month":"2025-08","type":"Repair","total":35327.04},{"depot":"6","month":"2025-08","type":"Service","total":9270.17},{"depot":"6","month":"2025-08","type":"other","total":187.5},{"depot":"6","month":"2025-08","type":"tyre","total":5310.6},{"depot":"6","month":"2025-09","type":"Repair","total":56810.32},{"depot":"6","month":"2025-09","type":"Service","total":14748.4},{"depot":"6","month":"2025-09","type":"other","total":59.55},{"depot":"6","month":"2025-09","type":"tyre","total":15243.85},{"depot":"6","month":"2025-10","type":"Breakdown","total":150.0},{"depot":"6","month":"2025-10","type":"Repair","total":155016.91},{"depot":"6","month":"2025-10","type":"Service","total":14227.23},{"depot":"6","month":"2025-10","type":"other","total":1275.0},{"depot":"6","month":"2025-10","type":"tyre","total":24350.1},{"depot":"6","month":"2025-11","type":"Breakdown","total":1474.63},{"depot":"6","month":"2025-11","type":"Repair","total":24468.43},{"depot":"6","month":"2025-11","type":"Service","total":7527.71},{"depot":"6","month":"2025-11","type":"other","total":1638.08},{"depot":"6","month":"2025-11","type":"tyre","total":11377.4},{"depot":"6","month":"2025-12","type":"Breakdown","total":2498.54},{"depot":"6","month":"2025-12","type":"Repair","total":45291.62},{"depot":"6","month":"2025-12","type":"Service","total":6310.03},{"depot":"6","month":"2025-12","type":"other","total":2490.36},{"depot":"6","month":"2025-12","type":"tyre","total":19279.0},{"depot":"7","month":"2025-01","type":"tyre","total":242.2},{"depot":"7","month":"2025-02","type":"Breakdown","total":289.1},{"depot":"7","month":"2025-02","type":"Repair","total":1395.81},{"depot":"7","month":"2025-02","type":"Service","total":840.0},{"depot":"7","month":"2025-02","type":"tyre","total":3006.1},{"depot":"7","month":"2025-03","type":"Repair","total":164.46},{"depot":"7","month":"2025-03","type":"tyre","total":4266.9},{"depot":"7","month":"2025-04","type":"Repair","total":864.0},{"depot":"7","month":"2025-04","type":"other","total":436.6},{"depot":"7","month":"2025-05","type":"other","total":1644.14},{"depot":"7","month":"2025-06","type":"Repair","total":49.72},{"depot":"7","month":"2025-06","type":"Service","total":262.17},{"depot":"7","month":"2025-06","type":"tyre","total":544.2},{"depot":"7","month":"2025-07","type":"Repair","total":199.1},{"depot":"7","month":"2025-07","type":"tyre","total":1301.8},{"depot":"7","month":"2025-08","type":"Breakdown","total":403.85},{"depot":"7","month":"2025-08","type":"Repair","total":1421.85},{"depot":"7","month":"2025-08","type":"Service","total":1332.42},{"depot":"7","month":"2025-08","type":"other","total":165.12},{"depot":"7","month":"2025-08","type":"tyre","total":827.4},{"depot":"7","month":"2025-09","type":"Repair","total":650.95},{"depot":"7","month":"2025-09","type":"other","total":1612.29},{"depot":"7","month":"2025-09","type":"tyre","total":3084.4},{"depot":"7","month":"2025-10","type":"Repair","total":240.25},{"depot":"7","month":"2025-10","type":"other","total":648.08},{"depot":"7","month":"2025-10","type":"tyre","total":809.9},{"depot":"7","month":"2025-11","type":"tyre","total":603.2},{"depot":"7","month":"2025-12","type":"Repair","total":1152.53},{"depot":"7","month":"2025-12","type":"Service","total":756.92},{"depot":"7","month":"2025-12","type":"other","total":1126.87},{"depot":"7","month":"2025-12","type":"tyre","total":1250.3},{"depot":"9","month":"2025-01","type":"Repair","total":4507.31},{"depot":"9","month":"2025-01","type":"Service","total":5161.99},{"depot":"9","month":"2025-01","type":"tyre","total":2890.8},{"depot":"9","month":"2025-02","type":"Repair","total":3379.69},{"depot":"9","month":"2025-02","type":"Service","total":2519.44},{"depot":"9","month":"2025-02","type":"tyre","total":2192.6},{"depot":"9","month":"2025-03","type":"Breakdown","total":140.0},{"depot":"9","month":"2025-03","type":"Repair","total":1894.6},{"depot":"9","month":"2025-03","type":"Service","total":3599.13},{"depot":"9","month":"2025-03","type":"tyre","total":1093.2},{"depot":"9","month":"2025-04","type":"Repair","total":2431.62},{"depot":"9","month":"2025-04","type":"Service","total":2132.17},{"depot":"9","month":"2025-04","type":"tyre","total":5179.8},{"depot":"9","month":"2025-05","type":"Breakdown","total":118.18},{"depot":"9","month":"2025-05","type":"Repair","total":6097.5},{"depot":"9","month":"2025-05","type":"Service","total":4850.92},{"depot":"9","month":"2025-05","type":"tyre","total":2103.8},{"depot":"9","month":"2025-06","type":"Repair","total":1741.08},{"depot":"9","month":"2025-06","type":"Service","total":2637.84},{"depot":"9","month":"2025-07","type":"Breakdown","total":358.31},{"depot":"9","month":"2025-07","type":"Repair","total":2562.93},{"depot":"9","month":"2025-07","type":"Service","total":1747.46},{"depot":"9","month":"2025-07","type":"tyre","total":1052.8},{"depot":"9","month":"2025-08","type":"Repair","total":12604.63},{"depot":"9","month":"2025-08","type":"Service","total":5909.25},{"depot":"9","month":"2025-08","type":"tyre","total":1327.2},{"depot":"9","month":"2025-09","type":"Breakdown","total":135.0},{"depot":"9","month":"2025-09","type":"Repair","total":5376.47},{"depot":"9","month":"2025-09","type":"Service","total":3671.87},{"depot":"9","month":"2025-09","type":"tyre","total":1367.8},{"depot":"9","month":"2025-10","type":"Repair","total":3600.51},{"depot":"9","month":"2025-10","type":"Service","total":3540.96},{"depot":"9","month":"2025-10","type":"tyre","total":1530.5},{"depot":"9","month":"2025-11","type":"Repair","total":48.0},{"depot":"9","month":"2025-11","type":"Service","total":4042.99},{"depot":"9","month":"2025-11","type":"tyre","total":1748.2},{"depot":"9","month":"2025-12","type":"Repair","total":2409.34},{"depot":"9","month":"2025-12","type":"Service","total":579.75},{"depot":"9","month":"2025-12","type":"tyre","total":1805.7}],"depot_recharge":[{"depot":"2","recharge_total":2544.4},{"depot":"3","recharge_total":47192.52},{"depot":"4","recharge_total":7966.6},{"depot":"5","recharge_total":19693.32},{"depot":"6","recharge_total":65172.81},{"depot":"7","recharge_total":128.52},{"depot":"9","recharge_total":1931.66}],"depot_jobs":[{"month":"2025-01","depot":"2","jobs":60},{"month":"2025-01","depot":"3","jobs":86},{"month":"2025-01","depot":"4","jobs":17},{"month":"2025-01","depot":"5","jobs":65},{"month":"2025-01","depot":"6","jobs":117},{"month":"2025-01","depot":"7","jobs":2},{"month":"2025-01","depot":"9","jobs":19},{"month":"2025-02","depot":"2","jobs":68},{"month":"2025-02","depot":"3","jobs":76},{"month":"2025-02","depot":"4","jobs":36},{"month":"2025-02","depot":"5","jobs":80},{"month":"2025-02","depot":"6","jobs":93},{"month":"2025-02","depot":"7","jobs":7},{"month":"2025-02","depot":"9","jobs":12},{"month":"2025-03","depot":"2","jobs":54},{"month":"2025-03","depot":"3","jobs":80},{"month":"2025-03","depot":"4","jobs":25},{"month":"2025-03","depot":"5","jobs":67},{"month":"2025-03","depot":"6","jobs":98},{"month":"2025-03","depot":"7","jobs":4},{"month":"2025-03","depot":"9","jobs":15},{"month":"2025-04","depot":"2","jobs":57},{"month":"2025-04","depot":"3","jobs":75},{"month":"2025-04","depot":"4","jobs":25},{"month":"2025-04","depot":"5","jobs":61},{"month":"2025-04","depot":"6","jobs":100},{"month":"2025-04","depot":"7","jobs":2},{"month":"2025-04","depot":"9","jobs":13},{"month":"2025-05","depot":"2","jobs":42},{"month":"2025-05","depot":"3","jobs":78},{"month":"2025-05","depot":"4","jobs":23},{"month":"2025-05","depot":"5","jobs":98},{"month":"2025-05","depot":"6","jobs":98},{"month":"2025-05","depot":"7","jobs":1},{"month":"2025-05","depot":"9","jobs":26},{"month":"2025-06","depot":"2","jobs":54},{"month":"2025-06","depot":"3","jobs":76},{"month":"2025-06","depot":"4","jobs":23},{"month":"2025-06","depot":"5","jobs":118},{"month":"2025-06","depot":"6","jobs":94},{"month":"2025-06","depot":"7","jobs":4},{"month":"2025-06","depot":"9","jobs":9},{"month":"2025-07","depot":"2","jobs":45},{"month":"2025-07","depot":"3","jobs":57},{"month":"2025-07","depot":"4","jobs":19},{"month":"2025-07","depot":"5","jobs":47},{"month":"2025-07","depot":"6","jobs":95},{"month":"2025-07","depot":"7","jobs":5},{"month":"2025-07","depot":"9","jobs":12},{"month":"2025-08","depot":"2","jobs":57},{"month":"2025-08","depot":"3","jobs":77},{"month":"2025-08","depot":"4","jobs":19},{"month":"2025-08","depot":"5","jobs":82},{"month":"2025-08","depot":"6","jobs":105},{"month":"2025-08","depot":"7","jobs":8},{"month":"2025-08","depot":"9","jobs":14},{"month":"2025-09","depot":"2","jobs":51},{"month":"2025-09","depot":"3","jobs":54},{"month":"2025-09","depot":"4","jobs":30},{"month":"2025-09","depot":"5","jobs":59},{"month":"2025-09","depot":"6","jobs":102},{"month":"2025-09","depot":"7","jobs":8},{"month":"2025-09","depot":"9","jobs":13},{"month":"2025-10","depot":"2","jobs":78},{"month":"2025-10","depot":"3","jobs":79},{"month":"2025-10","depot":"4","jobs":16},{"month":"2025-10","depot":"5","jobs":78},{"month":"2025-10","depot":"6","jobs":131},{"month":"2025-10","depot":"7","jobs":6},{"month":"2025-10","depot":"9","jobs":11},{"month":"2025-11","depot":"2","jobs":55},{"month":"2025-11","depot":"3","jobs":60},{"month":"2025-11","depot":"4","jobs":17},{"month":"2025-11","depot":"5","jobs":85},{"month":"2025-11","depot":"6","jobs":75},{"month":"2025-11","depot":"7","jobs":2},{"month":"2025-11","depot":"9","jobs":11},{"month":"2025-12","depot":"2","jobs":46},{"month":"2025-12","depot":"3","jobs":70},{"month":"2025-12","depot":"4","jobs":20},{"month":"2025-12","depot":"5","jobs":78},{"month":"2025-12","depot":"6","jobs":103},{"month":"2025-12","depot":"7","jobs":7},{"month":"2025-12","depot":"9","jobs":11}],"depot_asset":[{"depot":"2","itemNo":"TL001","itemDesc":"TAUTLINER DROP DECK 45FT","total":297.5},{"depot":"2","itemNo":"TL017","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10749.14},{"depot":"2","itemNo":"TL030","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2635.24},{"depot":"2","itemNo":"TL040","itemDesc":"TAUTLINER FLAT TOP 45FT","total":75.0},{"depot":"2","itemNo":"TL048","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1320.04},{"depot":"2","itemNo":"TL065","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6617.93},{"depot":"2","itemNo":"TL066","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6212.68},{"depot":"2","itemNo":"TL075","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1147.58},{"depot":"2","itemNo":"TL082","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7430.07},{"depot":"2","itemNo":"TL083","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":21426.37},{"depot":"2","itemNo":"TL091","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4401.84},{"depot":"2","itemNo":"TL094","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4541.5},{"depot":"2","itemNo":"TL099","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2905.76},{"depot":"2","itemNo":"TL104","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1718.28},{"depot":"2","itemNo":"TL131","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2245.41},{"depot":"2","itemNo":"TL136","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2388.03},{"depot":"2","itemNo":"TL137","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1335.74},{"depot":"2","itemNo":"TL139","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8949.21},{"depot":"2","itemNo":"TL141","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1662.49},{"depot":"2","itemNo":"TL143","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10367.88},{"depot":"2","itemNo":"TL145","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7949.23},{"depot":"2","itemNo":"TL155","itemDesc":"TAUTLINER FLAT TOP 45FT","total":816.64},{"depot":"2","itemNo":"TL156","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5024.6},{"depot":"2","itemNo":"TL161","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1313.03},{"depot":"2","itemNo":"TL165","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3200.69},{"depot":"2","itemNo":"TL170","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3497.6},{"depot":"2","itemNo":"TL173","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5819.74},{"depot":"2","itemNo":"TL174","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2716.53},{"depot":"2","itemNo":"TL178","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ LOAD/RES","total":7898.45},{"depot":"2","itemNo":"TL181","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3544.68},{"depot":"2","itemNo":"TL185","itemDesc":"TAUTLINER DROP DECK 45FT","total":672.51},{"depot":"2","itemNo":"TL200","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2355.76},{"depot":"2","itemNo":"TL201","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2135.73},{"depot":"2","itemNo":"TL204","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1939.85},{"depot":"2","itemNo":"TL217","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2101.02},{"depot":"2","itemNo":"TL218","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1858.82},{"depot":"2","itemNo":"TL232","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":13204.85},{"depot":"2","itemNo":"TL234","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1688.83},{"depot":"2","itemNo":"TL235","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4204.97},{"depot":"2","itemNo":"TL238","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":6947.37},{"depot":"2","itemNo":"TL294","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10673.26},{"depot":"2","itemNo":"TL298","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2224.6},{"depot":"2","itemNo":"TL319","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2484.41},{"depot":"2","itemNo":"TL320","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2094.09},{"depot":"2","itemNo":"TL326","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1904.15},{"depot":"2","itemNo":"TL327","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2760.0},{"depot":"2","itemNo":"TL328","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8493.82},{"depot":"2","itemNo":"TL343","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5046.77},{"depot":"2","itemNo":"TL346","itemDesc":"TAUTLINER FLAT TOP 45FT","total":48.0},{"depot":"2","itemNo":"TL353","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":589.32},{"depot":"2","itemNo":"TL357","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":450.0},{"depot":"2","itemNo":"TL363","itemDesc":"TAUTLINER FLAT TOP 45FT","total":468.42},{"depot":"2","itemNo":"TL364","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2529.69},{"depot":"2","itemNo":"TL366","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1165.0},{"depot":"2","itemNo":"TL367","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3526.54},{"depot":"2","itemNo":"TL368","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":58.6},{"depot":"2","itemNo":"TL369","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4268.24},{"depot":"2","itemNo":"TL374","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1308.19},{"depot":"2","itemNo":"TL375","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1006.02},{"depot":"2","itemNo":"TL376","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":497.57},{"depot":"2","itemNo":"TL378","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2238.47},{"depot":"2","itemNo":"TL388","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6106.94},{"depot":"2","itemNo":"TL389","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2524.27},{"depot":"2","itemNo":"TL390","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8385.47},{"depot":"2","itemNo":"TL391","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3066.3},{"depot":"2","itemNo":"TL392","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3761.96},{"depot":"2","itemNo":"TL393","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2416.04},{"depot":"2","itemNo":"TL405","itemDesc":"TAUTLINER FLAT TOP 45FT","total":653.0},{"depot":"2","itemNo":"TL407","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1740.45},{"depot":"2","itemNo":"TL408","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2856.53},{"depot":"2","itemNo":"TL432","itemDesc":"TAUTLINER DROP DECK 45FT LOAD RESTRAINT","total":6840.57},{"depot":"2","itemNo":"TP009","itemDesc":"END TIPPER RINGFEDER","total":6195.89},{"depot":"2","itemNo":"TP010","itemDesc":"END TIPPER RINGFEDER","total":886.25},{"depot":"2","itemNo":"TP101","itemDesc":"END TIPPER RINGFEDER","total":87413.04},{"depot":"2","itemNo":"TR003","itemDesc":"REFRIGERATED TAUTLINER STANDARD HEIGHT TRI","total":1951.49},{"depot":"2","itemNo":"TS004","itemDesc":"SKEL TIPPING TRI AXLE","total":2366.8},{"depot":"2","itemNo":"TS004-1","itemDesc":"AUXILIARY ENGINES","total":153.58},{"depot":"2","itemNo":"TS010","itemDesc":"SKEL TIPPING TRI AXLE","total":8084.1},{"depot":"2","itemNo":"TS010-1","itemDesc":"AUXILIARY ENGINE VANGUARD PETROL 23HP","total":6754.93},{"depot":"2","itemNo":"TS011","itemDesc":"SKEL TIPPING TRI AXLE","total":8821.53},{"depot":"2","itemNo":"TS015","itemDesc":"SKEL TIPPING TRI AXLE","total":831.37},{"depot":"2","itemNo":"TS017","itemDesc":"SKEL TIPPING TRI AXLE","total":1791.24},{"depot":"2","itemNo":"TS032","itemDesc":"SKEL TIPPING TRI AXLE","total":9553.38},{"depot":"2","itemNo":"TS033","itemDesc":"SKEL TIPPING TRI AXLE","total":10183.04},{"depot":"2","itemNo":"TS033-1","itemDesc":"AUXILIARY ENGINE VANGUARD PETROL 23HP","total":78.58},{"depot":"2","itemNo":"TT003","itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":4695.53},{"depot":"2","itemNo":"TT007","itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":6486.6},{"depot":"2","itemNo":"TT008","itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":23987.45},{"depot":"2","itemNo":"TT024","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":4141.86},{"depot":"2","itemNo":"TT027","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":3055.0},{"depot":"2","itemNo":"TT036","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":15247.15},{"depot":"2","itemNo":"TT039","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":9126.74},{"depot":"2","itemNo":"TT042","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":14975.72},{"depot":"2","itemNo":"TT045","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":3033.75},{"depot":"2","itemNo":"TT049","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":571.35},{"depot":"2","itemNo":"TT053","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":9078.85},{"depot":"2","itemNo":"TT055","itemDesc":"TERMINAL TRACTOR KALMAR","total":902.8},{"depot":"2","itemNo":"TT066","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":3813.74},{"depot":"2","itemNo":"TT077","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":7112.17},{"depot":"2","itemNo":"TT079","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":1722.2},{"depot":"2","itemNo":"TT107","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":10542.01},{"depot":"2","itemNo":"TT108","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":1992.46},{"depot":"2","itemNo":"TT112","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":10534.63},{"depot":"2","itemNo":"TW003","itemDesc":"MOBILE TRUCK WASH","total":37.5},{"depot":"3","itemNo":"TL038","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6194.89},{"depot":"3","itemNo":"TL041","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5734.68},{"depot":"3","itemNo":"TL064","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6651.27},{"depot":"3","itemNo":"TL073","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10692.33},{"depot":"3","itemNo":"TL076","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5974.05},{"depot":"3","itemNo":"TL092","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11210.77},{"depot":"3","itemNo":"TL093","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10903.14},{"depot":"3","itemNo":"TL095","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8632.02},{"depot":"3","itemNo":"TL098","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7114.07},{"depot":"3","itemNo":"TL101","itemDesc":"TAUTLINER FLAT TOP 45FT","total":19327.31},{"depot":"3","itemNo":"TL103","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9861.21},{"depot":"3","itemNo":"TL123","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3208.85},{"depot":"3","itemNo":"TL132","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9974.19},{"depot":"3","itemNo":"TL135","itemDesc":"TAUTLINER FLAT TOP 45FT","total":14719.14},{"depot":"3","itemNo":"TL140","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5271.32},{"depot":"3","itemNo":"TL146","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2555.95},{"depot":"3","itemNo":"TL153","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7222.99},{"depot":"3","itemNo":"TL154","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10666.47},{"depot":"3","itemNo":"TL157","itemDesc":"TAUTLINER FLAT TOP 45FT","total":18581.39},{"depot":"3","itemNo":"TL162","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":18310.08},{"depot":"3","itemNo":"TL172","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4428.51},{"depot":"3","itemNo":"TL175","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":9418.37},{"depot":"3","itemNo":"TL176","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5480.99},{"depot":"3","itemNo":"TL182","itemDesc":"TAUTLINER DROP DECK 45FT","total":1335.23},{"depot":"3","itemNo":"TL190","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4864.44},{"depot":"3","itemNo":"TL196","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3481.14},{"depot":"3","itemNo":"TL198","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":15887.13},{"depot":"3","itemNo":"TL202","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2714.23},{"depot":"3","itemNo":"TL208","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5046.94},{"depot":"3","itemNo":"TL214","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5823.89},{"depot":"3","itemNo":"TL220","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1297.13},{"depot":"3","itemNo":"TL221","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":161.3},{"depot":"3","itemNo":"TL222","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6549.24},{"depot":"3","itemNo":"TL226","itemDesc":"TAUTLINER FLAT TOP 45FT","total":545.6},{"depot":"3","itemNo":"TL233","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10712.07},{"depot":"3","itemNo":"TL236","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6931.3},{"depot":"3","itemNo":"TL237","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":7623.96},{"depot":"3","itemNo":"TL239","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7762.32},{"depot":"3","itemNo":"TL241","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8655.37},{"depot":"3","itemNo":"TL242","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8685.81},{"depot":"3","itemNo":"TL243","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5461.77},{"depot":"3","itemNo":"TL244","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2829.05},{"depot":"3","itemNo":"TL245","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7826.38},{"depot":"3","itemNo":"TL247","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6097.68},{"depot":"3","itemNo":"TL248","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9689.44},{"depot":"3","itemNo":"TL249","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10746.96},{"depot":"3","itemNo":"TL250","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7253.87},{"depot":"3","itemNo":"TL251","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6521.8},{"depot":"3","itemNo":"TL253","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10569.77},{"depot":"3","itemNo":"TL254","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":17650.88},{"depot":"3","itemNo":"TL255","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4984.39},{"depot":"3","itemNo":"TL260","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9143.58},{"depot":"3","itemNo":"TL262","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12818.98},{"depot":"3","itemNo":"TL263","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11018.32},{"depot":"3","itemNo":"TL264","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9538.69},{"depot":"3","itemNo":"TL266","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10991.2},{"depot":"3","itemNo":"TL267","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":13158.75},{"depot":"3","itemNo":"TL268","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6061.77},{"depot":"3","itemNo":"TL269","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9366.45},{"depot":"3","itemNo":"TL270","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10562.42},{"depot":"3","itemNo":"TL271","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9174.58},{"depot":"3","itemNo":"TL272","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":13793.17},{"depot":"3","itemNo":"TL273","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":161.3},{"depot":"3","itemNo":"TL274","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":161.3},{"depot":"3","itemNo":"TL275","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":161.3},{"depot":"3","itemNo":"TL279","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6278.46},{"depot":"3","itemNo":"TL280","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7622.82},{"depot":"3","itemNo":"TL281","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5629.36},{"depot":"3","itemNo":"TL282","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10082.69},{"depot":"3","itemNo":"TL283","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4788.7},{"depot":"3","itemNo":"TL286","itemDesc":"TAUTLINER FLAT TOP 45FT","total":709.55},{"depot":"3","itemNo":"TL293","itemDesc":"TAUTLINER FLAT TOP 45FT","total":47.5},{"depot":"3","itemNo":"TL296","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1094.5},{"depot":"3","itemNo":"TL308","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":324.35},{"depot":"3","itemNo":"TL321","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5266.44},{"depot":"3","itemNo":"TL329","itemDesc":"TAUTLINER FLAT TOP 45FT","total":12869.17},{"depot":"3","itemNo":"TL333","itemDesc":"TAUTLINER FLAT TOP 45FT","total":19092.76},{"depot":"3","itemNo":"TL334","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7554.99},{"depot":"3","itemNo":"TL335","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4371.62},{"depot":"3","itemNo":"TL337","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9335.59},{"depot":"3","itemNo":"TL338","itemDesc":"TAUTLINER FLAT TOP 45FT","total":13403.8},{"depot":"3","itemNo":"TL340","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6302.44},{"depot":"3","itemNo":"TL346","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7170.09},{"depot":"3","itemNo":"TL347","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7835.79},{"depot":"3","itemNo":"TL355","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":317.25},{"depot":"3","itemNo":"TL362","itemDesc":"TAUTLINER FLAT TOP 45FT","total":844.71},{"depot":"3","itemNo":"TL365","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7700.96},{"depot":"3","itemNo":"TL366","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7277.42},{"depot":"3","itemNo":"TL368","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7632.31},{"depot":"3","itemNo":"TL384","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2434.4},{"depot":"3","itemNo":"TL385","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":939.7},{"depot":"3","itemNo":"TL394","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11808.91},{"depot":"3","itemNo":"TL395","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10110.17},{"depot":"3","itemNo":"TL399","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":885.82},{"depot":"3","itemNo":"TL401","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1484.0},{"depot":"3","itemNo":"TL402","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":833.5},{"depot":"3","itemNo":"TL412","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3341.14},{"depot":"3","itemNo":"TL425","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1475.85},{"depot":"3","itemNo":"TL428","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":595.87},{"depot":"3","itemNo":"TL429","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":730.53},{"depot":"3","itemNo":"TL430","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1115.35},{"depot":"3","itemNo":"TL431","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":949.22},{"depot":"3","itemNo":"TL499","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":393.75},{"depot":"3","itemNo":"TL503","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":644.77},{"depot":"3","itemNo":"TL512","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2988.16},{"depot":"3","itemNo":"TL514","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7556.15},{"depot":"3","itemNo":"TL526","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":464.41},{"depot":"3","itemNo":"TS023","itemDesc":"SKEL TIPPING TRI AXLE","total":5736.65},{"depot":"3","itemNo":"TT011","itemDesc":"SINO TERMINAL TRACTOR LOW ROOF","total":13493.82},{"depot":"3","itemNo":"TT016","itemDesc":"DAYSWORTH TERMINAL TRACTOR LOW ROOF","total":8036.83},{"depot":"3","itemNo":"TT018","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF EURO II","total":11794.28},{"depot":"3","itemNo":"TT026","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":9287.29},{"depot":"3","itemNo":"TT029","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":20866.83},{"depot":"3","itemNo":"TT030","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":12533.47},{"depot":"3","itemNo":"TT034","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":16122.46},{"depot":"3","itemNo":"TT037","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":16198.54},{"depot":"3","itemNo":"TT038","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":4078.05},{"depot":"3","itemNo":"TT063","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":8659.48},{"depot":"3","itemNo":"TT064","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5216.42},{"depot":"3","itemNo":"TT068","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":36908.9},{"depot":"3","itemNo":"TT072","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":1392.4},{"depot":"3","itemNo":"TT080","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":28195.73},{"depot":"3","itemNo":"TT081","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":14309.14},{"depot":"3","itemNo":"TT082","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":3845.34},{"depot":"3","itemNo":"TT092","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":8462.43},{"depot":"3","itemNo":"TT104","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":17403.77},{"depot":"3","itemNo":"TT109","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":14669.88},{"depot":"3","itemNo":"TT114","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":9544.69},{"depot":"3","itemNo":"TT116","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":4163.22},{"depot":"3","itemNo":"TT121","itemDesc":"TERMINAL TRACTOR HIGH ROOF DAYSWORTH","total":4356.93},{"depot":"3","itemNo":"TT123","itemDesc":"TERMINAL TRACTOR HIGH ROOF DAYSWORTH","total":2770.82},{"depot":"3","itemNo":"TW007","itemDesc":"MOBILE TRUCK WASH","total":131.25},{"depot":"4","itemNo":"TL102","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2470.2},{"depot":"4","itemNo":"TL103","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1328.48},{"depot":"4","itemNo":"TL123","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1008.0},{"depot":"4","itemNo":"TL142","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":25903.22},{"depot":"4","itemNo":"TL144","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":17532.05},{"depot":"4","itemNo":"TL184","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9135.64},{"depot":"4","itemNo":"TL207","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":23270.34},{"depot":"4","itemNo":"TL209","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6531.6},{"depot":"4","itemNo":"TL213","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2038.18},{"depot":"4","itemNo":"TL220","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3953.19},{"depot":"4","itemNo":"TL221","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12713.53},{"depot":"4","itemNo":"TL231","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1426.0},{"depot":"4","itemNo":"TL247","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":577.2},{"depot":"4","itemNo":"TL248","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":577.2},{"depot":"4","itemNo":"TL258","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11955.5},{"depot":"4","itemNo":"TL259","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9114.01},{"depot":"4","itemNo":"TL261","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6926.42},{"depot":"4","itemNo":"TL265","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5508.2},{"depot":"4","itemNo":"TL273","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":16294.44},{"depot":"4","itemNo":"TL274","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":28642.42},{"depot":"4","itemNo":"TL275","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":20343.35},{"depot":"4","itemNo":"TL296","itemDesc":"TAUTLINER FLAT TOP 45FT","total":11952.5},{"depot":"4","itemNo":"TL299","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7405.69},{"depot":"4","itemNo":"TL305","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11939.72},{"depot":"4","itemNo":"TL315","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8364.31},{"depot":"4","itemNo":"TL318","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5545.98},{"depot":"4","itemNo":"TL365","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":577.2},{"depot":"4","itemNo":"TL401","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7131.6},{"depot":"4","itemNo":"TL427","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1202.0},{"depot":"4","itemNo":"TS009","itemDesc":"SKEL TIPPING TRI AXLE","total":10388.76},{"depot":"4","itemNo":"TS012","itemDesc":"SKEL TIPPING TRI AXLE","total":7578.1},{"depot":"4","itemNo":"TT009","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":10455.36},{"depot":"5","itemNo":"TL053","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2619.46},{"depot":"5","itemNo":"TL057","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5054.19},{"depot":"5","itemNo":"TL063","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4226.67},{"depot":"5","itemNo":"TL067","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3235.87},{"depot":"5","itemNo":"TL070","itemDesc":"TAUTLINER DROP DECK 45FT","total":4512.91},{"depot":"5","itemNo":"TL071","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":5337.57},{"depot":"5","itemNo":"TL077","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6281.31},{"depot":"5","itemNo":"TL084","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3182.55},{"depot":"5","itemNo":"TL085","itemDesc":"TAUTLINER FLAT TOP 45FT","total":19354.21},{"depot":"5","itemNo":"TL090","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5294.45},{"depot":"5","itemNo":"TL096","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2686.11},{"depot":"5","itemNo":"TL151","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5888.67},{"depot":"5","itemNo":"TL152","itemDesc":"TAUTLINER FLAT TOP 45FT","total":20091.11},{"depot":"5","itemNo":"TL159","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1911.23},{"depot":"5","itemNo":"TL166","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7793.1},{"depot":"5","itemNo":"TL169","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1933.04},{"depot":"5","itemNo":"TL186","itemDesc":"TAUTLINER DROP DECK 45FT","total":3260.35},{"depot":"5","itemNo":"TL187","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3234.25},{"depot":"5","itemNo":"TL188","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12204.28},{"depot":"5","itemNo":"TL195","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8571.75},{"depot":"5","itemNo":"TL205","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6536.91},{"depot":"5","itemNo":"TL224","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1899.89},{"depot":"5","itemNo":"TL286","itemDesc":"TAUTLINER FLAT TOP 45FT","total":377.17},{"depot":"5","itemNo":"TL287","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5173.7},{"depot":"5","itemNo":"TL288","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2894.76},{"depot":"5","itemNo":"TL289","itemDesc":"TAUTLINER FLAT TOP 45FT","total":413.37},{"depot":"5","itemNo":"TL290","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3349.88},{"depot":"5","itemNo":"TL301","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3681.19},{"depot":"5","itemNo":"TL302","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2312.4},{"depot":"5","itemNo":"TL303","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":420.86},{"depot":"5","itemNo":"TL304","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1091.6},{"depot":"5","itemNo":"TL308","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":954.67},{"depot":"5","itemNo":"TL309","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4398.52},{"depot":"5","itemNo":"TL312","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3665.82},{"depot":"5","itemNo":"TL316","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":630.0},{"depot":"5","itemNo":"TL330","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2434.57},{"depot":"5","itemNo":"TL331","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8605.79},{"depot":"5","itemNo":"TL349","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3293.92},{"depot":"5","itemNo":"TL352","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":350.0},{"depot":"5","itemNo":"TL355","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1077.42},{"depot":"5","itemNo":"TL359","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1869.84},{"depot":"5","itemNo":"TL365","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":98.0},{"depot":"5","itemNo":"TL372","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":2577.23},{"depot":"5","itemNo":"TL379","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5475.93},{"depot":"5","itemNo":"TL422","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1367.15},{"depot":"5","itemNo":"TL423","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1075.1},{"depot":"5","itemNo":"TL424","itemDesc":"TAUTLINER FLAT TOP 45FT","total":606.37},{"depot":"5","itemNo":"TL434","itemDesc":"TAUTLINER FLAT TOP 45FT","total":965.22},{"depot":"5","itemNo":"TL435","itemDesc":"TAUTLINER FLAT TOP 45FT","total":919.53},{"depot":"5","itemNo":"TL437","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":15272.86},{"depot":"5","itemNo":"TL438","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5997.21},{"depot":"5","itemNo":"TL439","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1380.0},{"depot":"5","itemNo":"TL442","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":27379.16},{"depot":"5","itemNo":"TL443","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1060.39},{"depot":"5","itemNo":"TL444","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":21808.76},{"depot":"5","itemNo":"TL445","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4640.68},{"depot":"5","itemNo":"TL446","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9523.02},{"depot":"5","itemNo":"TL447","itemDesc":"TAUTLINER FLAT TOP 45FT","total":11289.63},{"depot":"5","itemNo":"TL448","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10774.7},{"depot":"5","itemNo":"TL449","itemDesc":"TAUTLINER FLAT TOP 45FT","total":15794.89},{"depot":"5","itemNo":"TL450","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9136.3},{"depot":"5","itemNo":"TL451","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4279.68},{"depot":"5","itemNo":"TL453","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7967.94},{"depot":"5","itemNo":"TL454","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12796.52},{"depot":"5","itemNo":"TL455","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9949.68},{"depot":"5","itemNo":"TL456","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9752.28},{"depot":"5","itemNo":"TL457","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11325.31},{"depot":"5","itemNo":"TL458","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9044.88},{"depot":"5","itemNo":"TL459","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":13093.43},{"depot":"5","itemNo":"TL460","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":15872.91},{"depot":"5","itemNo":"TL461","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6092.44},{"depot":"5","itemNo":"TL462","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":15852.66},{"depot":"5","itemNo":"TL463","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9953.95},{"depot":"5","itemNo":"TL464","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1378.6},{"depot":"5","itemNo":"TL465","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6519.95},{"depot":"5","itemNo":"TL466","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10709.21},{"depot":"5","itemNo":"TL467","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":15431.72},{"depot":"5","itemNo":"TL468","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2787.33},{"depot":"5","itemNo":"TL469","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8465.43},{"depot":"5","itemNo":"TL470","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11401.7},{"depot":"5","itemNo":"TL471","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":9757.99},{"depot":"5","itemNo":"TL473","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11743.77},{"depot":"5","itemNo":"TL474","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7392.02},{"depot":"5","itemNo":"TL475","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3387.71},{"depot":"5","itemNo":"TL476","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4412.76},{"depot":"5","itemNo":"TL488","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":47.5},{"depot":"5","itemNo":"TL492","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":357.5},{"depot":"5","itemNo":"TL493","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3739.41},{"depot":"5","itemNo":"TL494","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7611.82},{"depot":"5","itemNo":"TL495","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":478.36},{"depot":"5","itemNo":"TL496","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":24734.73},{"depot":"5","itemNo":"TL497","itemDesc":"TAUTLINER FLAT TOP 45FT","total":12922.79},{"depot":"5","itemNo":"TL498","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12165.78},{"depot":"5","itemNo":"TL502","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1615.6},{"depot":"5","itemNo":"TL503","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1281.03},{"depot":"5","itemNo":"TL504","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3055.67},{"depot":"5","itemNo":"TL505","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3164.54},{"depot":"5","itemNo":"TL506","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2946.9},{"depot":"5","itemNo":"TL507","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1225.16},{"depot":"5","itemNo":"TL508","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":435.67},{"depot":"5","itemNo":"TL509","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2592.01},{"depot":"5","itemNo":"TL511","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":576.89},{"depot":"5","itemNo":"TL513","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":876.85},{"depot":"5","itemNo":"TL515","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":761.85},{"depot":"5","itemNo":"TL516","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2621.75},{"depot":"5","itemNo":"TL525","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":2255.81},{"depot":"5","itemNo":"TL526","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":496.74},{"depot":"5","itemNo":"TS014","itemDesc":"SKEL TIPPING TRI AXLE","total":2037.68},{"depot":"5","itemNo":"TS025","itemDesc":"SKEL TIPPING TRI AXLE","total":2704.75},{"depot":"5","itemNo":"TS025-1","itemDesc":"AUXILIARY ENGINE","total":15327.02},{"depot":"5","itemNo":"TS028","itemDesc":"SKEL TIPPING TRI AXLE","total":5018.07},{"depot":"5","itemNo":"TS031","itemDesc":"SKEL TIPPING TRI AXLE","total":463.03},{"depot":"5","itemNo":"TS031-1","itemDesc":"AUXILIARY ENGINE","total":957.0},{"depot":"5","itemNo":"TS035","itemDesc":"SKEL TIPPING TRI AXLE","total":1551.47},{"depot":"5","itemNo":"TT004","itemDesc":"TERBERG TERMINAL TRACTOR LOW ROOF","total":18692.61},{"depot":"5","itemNo":"TT012","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF (MINTO)","total":6655.98},{"depot":"5","itemNo":"TT015","itemDesc":"DAYSWORTH TERMINAL TRACTOR LOW ROOF","total":9475.28},{"depot":"5","itemNo":"TT021","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":14970.43},{"depot":"5","itemNo":"TT025","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":18237.4},{"depot":"5","itemNo":"TT028","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":5474.27},{"depot":"5","itemNo":"TT031","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":19988.77},{"depot":"5","itemNo":"TT032","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":31763.13},{"depot":"5","itemNo":"TT033","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":15093.54},{"depot":"5","itemNo":"TT035","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":28239.4},{"depot":"5","itemNo":"TT041","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":5735.57},{"depot":"5","itemNo":"TT058","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":22979.0},{"depot":"5","itemNo":"TT067","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":49770.53},{"depot":"5","itemNo":"TT071","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":23137.18},{"depot":"5","itemNo":"TT085","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":47156.75},{"depot":"5","itemNo":"TT086","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":31860.92},{"depot":"5","itemNo":"TT087","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":24790.33},{"depot":"5","itemNo":"TT088","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":13597.32},{"depot":"5","itemNo":"TT089","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":4377.23},{"depot":"5","itemNo":"TT096","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":14615.28},{"depot":"5","itemNo":"TT098","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA (INGLEBURN)","total":7537.21},{"depot":"5","itemNo":"TT110","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":15510.43},{"depot":"5","itemNo":"TT118","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":13053.2},{"depot":"5","itemNo":"TT120","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":6062.79},{"depot":"5","itemNo":"TT122","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":8297.06},{"depot":"5","itemNo":"TT124","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":48192.7},{"depot":"5","itemNo":"TT125","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":36733.12},{"depot":"5","itemNo":"TT126","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":22525.55},{"depot":"5","itemNo":"TT127","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":5794.88},{"depot":"5","itemNo":"TT128","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":300.0},{"depot":"5","itemNo":"TW006","itemDesc":"MOBILE TRUCK WASH (INGELBURN)","total":75.0},{"depot":"6","itemNo":"TL032","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":322.54},{"depot":"6","itemNo":"TL045","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1840.96},{"depot":"6","itemNo":"TL053","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8438.16},{"depot":"6","itemNo":"TL081","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":4706.45},{"depot":"6","itemNo":"TL086","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":967.17},{"depot":"6","itemNo":"TL088","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9756.44},{"depot":"6","itemNo":"TL096","itemDesc":"TAUTLINER FLAT TOP 45FT","total":10534.36},{"depot":"6","itemNo":"TL101","itemDesc":"TAUTLINER FLAT TOP 45FT","total":491.25},{"depot":"6","itemNo":"TL106","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2988.31},{"depot":"6","itemNo":"TL107","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3549.81},{"depot":"6","itemNo":"TL133","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":11006.12},{"depot":"6","itemNo":"TL134","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7493.14},{"depot":"6","itemNo":"TL141","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6423.48},{"depot":"6","itemNo":"TL150","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":14640.08},{"depot":"6","itemNo":"TL152","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1542.74},{"depot":"6","itemNo":"TL159","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2722.5},{"depot":"6","itemNo":"TL163","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4405.33},{"depot":"6","itemNo":"TL167","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3796.87},{"depot":"6","itemNo":"TL169","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8528.5},{"depot":"6","itemNo":"TL177","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2099.94},{"depot":"6","itemNo":"TL183","itemDesc":"TAUTLINER DROP DECK 45FT","total":1987.45},{"depot":"6","itemNo":"TL189","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3637.12},{"depot":"6","itemNo":"TL192","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":3241.46},{"depot":"6","itemNo":"TL193","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":4750.85},{"depot":"6","itemNo":"TL197","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":112.5},{"depot":"6","itemNo":"TL199","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1275.0},{"depot":"6","itemNo":"TL203","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":989.4},{"depot":"6","itemNo":"TL206","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10131.14},{"depot":"6","itemNo":"TL211","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7984.28},{"depot":"6","itemNo":"TL212","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1911.24},{"depot":"6","itemNo":"TL215","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":785.64},{"depot":"6","itemNo":"TL216","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4695.98},{"depot":"6","itemNo":"TL223","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3044.35},{"depot":"6","itemNo":"TL225","itemDesc":"TAUTLINER FLAT TOP 45FT","total":999.7},{"depot":"6","itemNo":"TL226","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5409.98},{"depot":"6","itemNo":"TL227","itemDesc":"TAUTLINER DROP DECK 45FT","total":654.73},{"depot":"6","itemNo":"TL228","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1780.1},{"depot":"6","itemNo":"TL229","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1724.44},{"depot":"6","itemNo":"TL230","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3595.54},{"depot":"6","itemNo":"TL240","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3457.05},{"depot":"6","itemNo":"TL246","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9519.51},{"depot":"6","itemNo":"TL256","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2189.38},{"depot":"6","itemNo":"TL257","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9979.2},{"depot":"6","itemNo":"TL276","itemDesc":"TAUTLINER DROP DECK 45FT","total":1851.4},{"depot":"6","itemNo":"TL277","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":4462.02},{"depot":"6","itemNo":"TL278","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":2592.6},{"depot":"6","itemNo":"TL286","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3583.25},{"depot":"6","itemNo":"TL289","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7265.48},{"depot":"6","itemNo":"TL291","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5224.47},{"depot":"6","itemNo":"TL292","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2888.28},{"depot":"6","itemNo":"TL293","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8744.2},{"depot":"6","itemNo":"TL295","itemDesc":"TAUTLINER DROP DECK 45FT","total":2797.0},{"depot":"6","itemNo":"TL297","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5116.41},{"depot":"6","itemNo":"TL300","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5465.09},{"depot":"6","itemNo":"TL303","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4751.46},{"depot":"6","itemNo":"TL304","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1453.53},{"depot":"6","itemNo":"TL306","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3440.35},{"depot":"6","itemNo":"TL307","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1676.5},{"depot":"6","itemNo":"TL308","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10718.06},{"depot":"6","itemNo":"TL310","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5295.29},{"depot":"6","itemNo":"TL311","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4082.03},{"depot":"6","itemNo":"TL313","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1742.47},{"depot":"6","itemNo":"TL314","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":530.8},{"depot":"6","itemNo":"TL316","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2740.2},{"depot":"6","itemNo":"TL317","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2606.26},{"depot":"6","itemNo":"TL322","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1777.56},{"depot":"6","itemNo":"TL324","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4683.52},{"depot":"6","itemNo":"TL325","itemDesc":"TAUTLINER FLAT TOP 45FT","total":8815.2},{"depot":"6","itemNo":"TL336","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2462.97},{"depot":"6","itemNo":"TL341","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4055.79},{"depot":"6","itemNo":"TL344","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3157.77},{"depot":"6","itemNo":"TL345","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5207.57},{"depot":"6","itemNo":"TL347","itemDesc":"TAUTLINER FLAT TOP 45FT","total":350.3},{"depot":"6","itemNo":"TL348","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5269.56},{"depot":"6","itemNo":"TL350","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4153.54},{"depot":"6","itemNo":"TL351","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":8965.29},{"depot":"6","itemNo":"TL352","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":10551.83},{"depot":"6","itemNo":"TL353","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5125.8},{"depot":"6","itemNo":"TL354","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5472.27},{"depot":"6","itemNo":"TL355","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6591.21},{"depot":"6","itemNo":"TL356","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3628.57},{"depot":"6","itemNo":"TL357","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7734.06},{"depot":"6","itemNo":"TL358","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5114.43},{"depot":"6","itemNo":"TL359","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6086.28},{"depot":"6","itemNo":"TL362","itemDesc":"TAUTLINER FLAT TOP 45FT","total":665.99},{"depot":"6","itemNo":"TL370","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3355.44},{"depot":"6","itemNo":"TL371","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3264.27},{"depot":"6","itemNo":"TL372","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":6277.73},{"depot":"6","itemNo":"TL373","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":5872.63},{"depot":"6","itemNo":"TL377","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":18.75},{"depot":"6","itemNo":"TL381","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4513.79},{"depot":"6","itemNo":"TL382","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2654.61},{"depot":"6","itemNo":"TL383","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1894.81},{"depot":"6","itemNo":"TL385","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":741.67},{"depot":"6","itemNo":"TL386","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":700.46},{"depot":"6","itemNo":"TL387","itemDesc":"TAUTLINER FLAT TOP 45FT","total":7037.41},{"depot":"6","itemNo":"TL396","itemDesc":"TAUTLINER FLAT TOP 45FT","total":12250.84},{"depot":"6","itemNo":"TL398","itemDesc":"TAUTLINER FLAT TOP 45FT","total":6460.09},{"depot":"6","itemNo":"TL399","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4978.29},{"depot":"6","itemNo":"TL400","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":3743.2},{"depot":"6","itemNo":"TL403","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":7561.1},{"depot":"6","itemNo":"TL404","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9188.3},{"depot":"6","itemNo":"TL405","itemDesc":"TAUTLINER FLAT TOP 45FT","total":11594.79},{"depot":"6","itemNo":"TL406","itemDesc":"TAUTLINER FLAT TOP 45FT","total":12841.0},{"depot":"6","itemNo":"TL412","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1305.91},{"depot":"6","itemNo":"TL413","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4555.0},{"depot":"6","itemNo":"TL416","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3261.65},{"depot":"6","itemNo":"TL419","itemDesc":"TAUTLINER FLAT TOP 45FT","total":9794.6},{"depot":"6","itemNo":"TL421","itemDesc":"TAUTLINER FLAT TOP 45FT","total":837.3},{"depot":"6","itemNo":"TL426","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1561.8},{"depot":"6","itemNo":"TL433","itemDesc":"TAUTLINER FLAT TOP 45FT","total":787.77},{"depot":"6","itemNo":"TL435","itemDesc":"TAUTLINER FLAT TOP 45FT","total":142.5},{"depot":"6","itemNo":"TL436","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2426.38},{"depot":"6","itemNo":"TL441","itemDesc":"TAUTLINER FLAT TOP 45FT","total":807.74},{"depot":"6","itemNo":"TL448","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":649.17},{"depot":"6","itemNo":"TL458","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":375.0},{"depot":"6","itemNo":"TL461","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1332.02},{"depot":"6","itemNo":"TL477","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":990.1},{"depot":"6","itemNo":"TL478","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1143.85},{"depot":"6","itemNo":"TL479","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":758.85},{"depot":"6","itemNo":"TL480","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":742.82},{"depot":"6","itemNo":"TL481","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1344.59},{"depot":"6","itemNo":"TL482","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":612.9},{"depot":"6","itemNo":"TL483","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":4076.47},{"depot":"6","itemNo":"TL484","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1769.22},{"depot":"6","itemNo":"TL485","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":946.47},{"depot":"6","itemNo":"TL486","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":592.7},{"depot":"6","itemNo":"TL487","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":614.29},{"depot":"6","itemNo":"TL488","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":496.97},{"depot":"6","itemNo":"TL489","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":778.15},{"depot":"6","itemNo":"TL490","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":862.92},{"depot":"6","itemNo":"TL491","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1240.64},{"depot":"6","itemNo":"TL492","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1288.48},{"depot":"6","itemNo":"TL493","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2113.31},{"depot":"6","itemNo":"TL494","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1955.56},{"depot":"6","itemNo":"TL495","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":926.59},{"depot":"6","itemNo":"TL499","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1483.2},{"depot":"6","itemNo":"TL500","itemDesc":"TAUTLINER DROP DECK 45FT","total":3589.25},{"depot":"6","itemNo":"TL501","itemDesc":"TAUTLINER DROP DECK 45FT","total":689.57},{"depot":"6","itemNo":"TL504","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":999.24},{"depot":"6","itemNo":"TL505","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2173.92},{"depot":"6","itemNo":"TL508","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2148.8},{"depot":"6","itemNo":"TL510","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1277.81},{"depot":"6","itemNo":"TL513","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":85.6},{"depot":"6","itemNo":"TL517","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12433.05},{"depot":"6","itemNo":"TL518","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12414.3},{"depot":"6","itemNo":"TL519","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12414.3},{"depot":"6","itemNo":"TL520","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12470.77},{"depot":"6","itemNo":"TL521","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12470.55},{"depot":"6","itemNo":"TL522","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12226.8},{"depot":"6","itemNo":"TL523","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12226.8},{"depot":"6","itemNo":"TL524","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":12226.8},{"depot":"6","itemNo":"TL527","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":30.0},{"depot":"6","itemNo":"TL528","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":30.0},{"depot":"6","itemNo":"TL529","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":30.0},{"depot":"6","itemNo":"TS003","itemDesc":"SKEL TIPPING TRI AXLE","total":5217.26},{"depot":"6","itemNo":"TS003-1","itemDesc":"AUXILIARY ENGINE","total":540.89},{"depot":"6","itemNo":"TS005","itemDesc":"SKEL TIPPING TRI AXLE","total":3873.24},{"depot":"6","itemNo":"TS005-1","itemDesc":"AUXILIARY ENGINE","total":257.85},{"depot":"6","itemNo":"TS014","itemDesc":"SKEL TIPPING TRI AXLE","total":3866.33},{"depot":"6","itemNo":"TS014-1","itemDesc":"AUXILIARY ENGINE","total":149.11},{"depot":"6","itemNo":"TS016","itemDesc":"SKEL TIPPING TRI AXLE","total":1838.2},{"depot":"6","itemNo":"TS016-1","itemDesc":"AUXILIARY ENGINE","total":872.19},{"depot":"6","itemNo":"TS019","itemDesc":"SKEL TIPPING TRI AXLE","total":191.54},{"depot":"6","itemNo":"TS020","itemDesc":"SKEL TIPPING TRI AXLE","total":14765.56},{"depot":"6","itemNo":"TS020-1","itemDesc":"AUXILIARY ENGINE","total":503.2},{"depot":"6","itemNo":"TS021","itemDesc":"SKEL TIPPING TRI AXLE","total":19885.09},{"depot":"6","itemNo":"TS021-2","itemDesc":"AUXILIARY ENGINES","total":242.08},{"depot":"6","itemNo":"TS022","itemDesc":"SKEL TIPPING TRI AXLE","total":11336.07},{"depot":"6","itemNo":"TS022-1","itemDesc":"AUXILIARY ENGINE","total":608.36},{"depot":"6","itemNo":"TS024","itemDesc":"SKEL TIPPING TRI AXLE","total":1479.38},{"depot":"6","itemNo":"TS024-1","itemDesc":"AUXILIARY ENGINES","total":54.75},{"depot":"6","itemNo":"TS026","itemDesc":"SKEL TIPPING TRI AXLE","total":5340.6},{"depot":"6","itemNo":"TS026-1","itemDesc":"AUXILIARY ENGINE","total":310.61},{"depot":"6","itemNo":"TS027","itemDesc":"SKEL TIPPING TRI AXLE","total":4485.71},{"depot":"6","itemNo":"TS027-1","itemDesc":"AUXILIARY ENGINE","total":2404.57},{"depot":"6","itemNo":"TS029","itemDesc":"SKEL TIPPING TRI AXLE","total":12913.32},{"depot":"6","itemNo":"TS029-1","itemDesc":"AUXILIARY ENGINE","total":2851.99},{"depot":"6","itemNo":"TS030","itemDesc":"SKEL TIPPING TRI AXLE","total":21726.73},{"depot":"6","itemNo":"TS030-1","itemDesc":"AUXILIARY ENGINE","total":220.08},{"depot":"6","itemNo":"TS031","itemDesc":"SKEL TIPPING TRI AXLE","total":1625.06},{"depot":"6","itemNo":"TS031-1","itemDesc":"AUXILIARY ENGINE","total":175.1},{"depot":"6","itemNo":"TS037","itemDesc":"SKEL TIPPING TRI AXLE","total":11289.0},{"depot":"6","itemNo":"TS037-1","itemDesc":"AUXILIARY ENGINE","total":952.73},{"depot":"6","itemNo":"TT043","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":5175.66},{"depot":"6","itemNo":"TT044","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":2417.79},{"depot":"6","itemNo":"TT046","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":2556.02},{"depot":"6","itemNo":"TT047","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":5765.68},{"depot":"6","itemNo":"TT051","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":10504.67},{"depot":"6","itemNo":"TT052","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":3910.71},{"depot":"6","itemNo":"TT054","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":4760.72},{"depot":"6","itemNo":"TT056","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":6504.56},{"depot":"6","itemNo":"TT057","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":10104.21},{"depot":"6","itemNo":"TT060","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":8049.12},{"depot":"6","itemNo":"TT062","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":19478.71},{"depot":"6","itemNo":"TT065","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5872.27},{"depot":"6","itemNo":"TT074","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":8578.42},{"depot":"6","itemNo":"TT076","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5808.34},{"depot":"6","itemNo":"TT083","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5572.08},{"depot":"6","itemNo":"TT090","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":6405.14},{"depot":"6","itemNo":"TT091","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":5978.52},{"depot":"6","itemNo":"TT093","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":6830.75},{"depot":"6","itemNo":"TT094","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":14422.83},{"depot":"6","itemNo":"TT097","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":3844.79},{"depot":"6","itemNo":"TT100","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":13871.87},{"depot":"6","itemNo":"TT101","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5090.99},{"depot":"6","itemNo":"TT102","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":5057.3},{"depot":"6","itemNo":"TT103","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":6912.42},{"depot":"6","itemNo":"TT105","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":2936.68},{"depot":"6","itemNo":"TT111","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":5925.42},{"depot":"6","itemNo":"TT113","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":8060.26},{"depot":"6","itemNo":"TT115","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":4071.64},{"depot":"6","itemNo":"TT117","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":8432.46},{"depot":"6","itemNo":"TT119","itemDesc":"TERMINAL TRACTOR HIGH ROOF TERBERG","total":4221.21},{"depot":"6","itemNo":"TW001","itemDesc":"MOBILE TRUCK WASH","total":541.61},{"depot":"6","itemNo":"TW010","itemDesc":"SPEEDYWASH","total":2726.0},{"depot":"7","itemNo":"TL097","itemDesc":"TAUTLINER FLAT TOP 45FT","total":3358.37},{"depot":"7","itemNo":"TL100","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1203.08},{"depot":"7","itemNo":"TL105","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1407.83},{"depot":"7","itemNo":"TL180","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":6989.21},{"depot":"7","itemNo":"TL233","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":96.0},{"depot":"7","itemNo":"TL236","itemDesc":"TAUTLINER FLAT TOP 45FT","total":543.6},{"depot":"7","itemNo":"TL242","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":165.12},{"depot":"7","itemNo":"TL244","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":4648.8},{"depot":"7","itemNo":"TL245","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1535.2},{"depot":"7","itemNo":"TL247","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":923.4},{"depot":"7","itemNo":"TL249","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":96.0},{"depot":"7","itemNo":"TL250","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":96.0},{"depot":"7","itemNo":"TL251","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":680.2},{"depot":"7","itemNo":"TL253","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":96.0},{"depot":"7","itemNo":"TL254","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":894.46},{"depot":"7","itemNo":"TL255","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1853.74},{"depot":"7","itemNo":"TL262","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":403.85},{"depot":"7","itemNo":"TL263","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":289.1},{"depot":"7","itemNo":"TL264","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":197.7},{"depot":"7","itemNo":"TL268","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":37.5},{"depot":"7","itemNo":"TL269","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1644.14},{"depot":"7","itemNo":"TL270","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":400.85},{"depot":"7","itemNo":"TL271","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":284.06},{"depot":"7","itemNo":"TL323","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1173.03},{"depot":"7","itemNo":"TL342","itemDesc":"TAUTLINER FLAT TOP 45FT","total":557.17},{"depot":"7","itemNo":"TR003","itemDesc":"REFRIGERATED TAUTLINER STANDARD HEIGHT TRI","total":242.2},{"depot":"7","itemNo":"TS013","itemDesc":"SKEL TIPPING TRI AXLE","total":1776.02},{"depot":"9","itemNo":"TL018","itemDesc":"TAUTLINER DROP DECK 45FT","total":3259.41},{"depot":"9","itemNo":"TL059","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":1469.26},{"depot":"9","itemNo":"TL130","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4097.25},{"depot":"9","itemNo":"TL149","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":5172.4},{"depot":"9","itemNo":"TL168","itemDesc":"TAUTLINER FLAT TOP 45FT","total":5316.97},{"depot":"9","itemNo":"TL191","itemDesc":"TAUTLINER FLAT TOP 45FT","total":1303.5},{"depot":"9","itemNo":"TL194","itemDesc":"TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","total":3845.03},{"depot":"9","itemNo":"TL219","itemDesc":"TAUTLINER FLAT TOP 45FT","total":17677.4},{"depot":"9","itemNo":"TL284","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1365.74},{"depot":"9","itemNo":"TL285","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2901.55},{"depot":"9","itemNo":"TL332","itemDesc":"TAUTLINER FLAT TOP 45FT","total":4946.85},{"depot":"9","itemNo":"TL352","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":126.25},{"depot":"9","itemNo":"TL361","itemDesc":"TAUTLINER FLAT TOP 45FT","total":2382.48},{"depot":"9","itemNo":"TL377","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":450.57},{"depot":"9","itemNo":"TL380","itemDesc":"TAUTLINER FLAT TOP 45FT","total":679.54},{"depot":"9","itemNo":"TL409","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":605.59},{"depot":"9","itemNo":"TL410","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2276.33},{"depot":"9","itemNo":"TL411","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":1934.4},{"depot":"9","itemNo":"TL414","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":460.98},{"depot":"9","itemNo":"TL415","itemDesc":"TAUTLINER FLAT TOP 45FT","total":590.9},{"depot":"9","itemNo":"TL417","itemDesc":"TAUTLINER FLAT TOP 45FT","total":875.75},{"depot":"9","itemNo":"TL418","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":445.98},{"depot":"9","itemNo":"TL420","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":579.81},{"depot":"9","itemNo":"TL452","itemDesc":"TAUTLINER DROP DECK 45FT MEZZ","total":2545.3},{"depot":"9","itemNo":"TS008","itemDesc":"SKEL TIPPING TRI AXLE","total":2063.59},{"depot":"9","itemNo":"TS034","itemDesc":"SKEL TIPPING TRI AXLE","total":1942.53},{"depot":"9","itemNo":"TS036","itemDesc":"SKEL TIPPING TRI AXLE","total":1604.45},{"depot":"9","itemNo":"TT010","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":3084.29},{"depot":"9","itemNo":"TT019","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF EURO II","total":702.77},{"depot":"9","itemNo":"TT022","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":5205.3},{"depot":"9","itemNo":"TT023","itemDesc":"SINO TERMINAL TRACTOR HIGH ROOF","total":1796.46},{"depot":"9","itemNo":"TT048","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":7232.79},{"depot":"9","itemNo":"TT050","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":2493.88},{"depot":"9","itemNo":"TT070","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":3008.79},{"depot":"9","itemNo":"TT075","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":1367.76},{"depot":"9","itemNo":"TT095","itemDesc":"TERMINAL TRACTOR HIGH ROOF KALMAR","total":8825.64},{"depot":"9","itemNo":"TT099","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":2608.44},{"depot":"9","itemNo":"TT106","itemDesc":"TERMINAL TRACTOR HIGH ROOF OTTAWA","total":2845.41}],"grand_total":4193708.41,"recharge_total":144629.83,"total_jobs":4156,"total_rows":18783,"date_range":["2025-01-02","2025-12-31"],"depots":["2","3","4","5","6","7","9"],"cost_groups":["HIRE","INTLBR","LABHIRE","MATL","OTHER","SUBLAB","TYRE","WS"],"types":["Breakdown","Repair","Service","other","tyre"],"assets":["AUXILIARY ENGINE","AUXILIARY ENGINE VANGUARD PETROL 23HP","AUXILIARY ENGINES","DAYSWORTH TERMINAL TRACTOR LOW ROOF","END TIPPER RINGFEDER","MOBILE TRUCK WASH","MOBILE TRUCK WASH (INGELBURN)","REFRIGERATED TAUTLINER STANDARD HEIGHT TRI","SINO TERMINAL TRACTOR HIGH ROOF","SINO TERMINAL TRACTOR HIGH ROOF (MINTO)","SINO TERMINAL TRACTOR HIGH ROOF EURO II","SINO TERMINAL TRACTOR LOW ROOF","SKEL TIPPING TRI AXLE","SPEEDYWASH","TAUTLINER DROP DECK 45FT","TAUTLINER DROP DECK 45FT LOAD RESTRAINT","TAUTLINER DROP DECK 45FT MEZZ","TAUTLINER DROP DECK 45FT MEZZ LOAD/RES","TAUTLINER FLAT TOP 45FT","TAUTLINER FLAT TOP 45FT LOAD RESTRAINT","TERBERG TERMINAL TRACTOR LOW ROOF","TERMINAL TRACTOR HIGH ROOF DAYSWORTH","TERMINAL TRACTOR HIGH ROOF KALMAR","TERMINAL TRACTOR HIGH ROOF OTTAWA","TERMINAL TRACTOR HIGH ROOF OTTAWA (INGLEBURN)","TERMINAL TRACTOR HIGH ROOF TERBERG","TERMINAL TRACTOR KALMAR"]};
+
+// Live index objects (null until file loaded)
+var OV_IDX=null;
+var DP_IDX=null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OVERVIEW FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function ovPopulateDateFilters(idx){
+  msBuild('ov-fYear',idx.years,'All Years',ovOnYearChange,[]);
+  msBuild('ov-fMonth',idx.months,'All Months',render,['ov-fWeek']);
+  msBuild('ov-fWeek',idx.weeks,'All Weeks',render,['ov-fMonth']);
+  var agg=idx.all;
+  msBuild('ov-fType',agg.types||[],'All Work Types',render,[]);
+  msBuild('ov-fCG',agg.cost_groups||[],'All Cost Groups',render,[]);
+  fillSel('ov-fAsset',agg.assets||[],'All Asset Types');
+}
+
+
+
+function ovOnYearChange(){
+  // When years filter changes, narrow month/week options
+  var yrs=msVals('ov-fYear');
+  var selMonths=msVals('ov-fMonth');
+  var selWeeks=msVals('ov-fWeek');
+  if(!OV_IDX){render();return;}
+  var months=OV_IDX.months,weeks=OV_IDX.weeks;
+  if(yrs.length){
+    months=OV_IDX.months.filter(function(m){return yrs.indexOf(m.split('-')[0])!==-1;});
+    weeks=OV_IDX.weeks.filter(function(w){return yrs.indexOf(w.split('-')[0])!==-1;});
+    // Keep currently selected months/weeks that are still valid
+    selMonths=selMonths.filter(function(m){return months.indexOf(m)!==-1;});
+    selWeeks=selWeeks.filter(function(w){return weeks.indexOf(w)!==-1;});
+  }
+  // Preserve selections in MS state
+  MS['ov-fMonth']=new Set(selMonths);
+  MS['ov-fWeek']=new Set(selWeeks);
+  msBuild('ov-fMonth',months,'All Months',render,['ov-fWeek']);
+  msBuild('ov-fWeek',weeks,'All Weeks',render,['ov-fMonth']);
+  render();
+}
+
+
+function ovGetF(){
+  return{
+    years:msVals('ov-fYear'),months:msVals('ov-fMonth'),weeks:msVals('ov-fWeek'),
+    types:msVals('ov-fType'),
+    cgs:msVals('ov-fCG'),
+    asset:document.getElementById('ov-fAsset').value,
+    recharge:document.getElementById('ov-fRecharge').value
+  };
+}
+
+
+
+function ovResetFilters(){
+  ['ov-fYear','ov-fMonth','ov-fWeek','ov-fType','ov-fCG'].forEach(function(id){
+    msClearAll(id);
+    var btn=document.getElementById(id+'-btn');
+    if(btn)msRefreshBtn(id,btn.dataset.ph||'');
+    var drop=document.getElementById(id+'-drop');
+    if(drop)drop.querySelectorAll('input').forEach(function(c){c.checked=false;c.parentElement.className='';});
+  });
+  ['ov-fAsset','ov-fRecharge'].forEach(function(id){document.getElementById(id).value='';});
+  if(OV_IDX)ovPopulateDateFilters(OV_IDX);
+  render();
+}
+
+
+
+function render(){
+  var f=ovGetF();
+  var agg=OV_IDX?resolveAgg(OV_IDX,f.years,f.months,f.weeks):(OV_SEED);
+  var d=applyNonDateFilters(agg,f);
+  // timeMode: 'week' when weeks selected, 'month' otherwise
+  var tm=f.weeks&&f.weeks.length?'week':'month';
+  updateBadge(d);updateKPIs(d);
+  renderMonthlyCG(d,tm);renderCGDonut(d);renderMonthlyType(d,tm);renderTypeDonut(d);
+  renderRecharge(d);renderJobs(d,tm);
+  // Highlight active filters
+  ['ov-fType','ov-fCG'].forEach(function(id){
+    var btn=document.getElementById(id+'-btn');
+    if(btn){if(msVals(id).length)btn.classList.add('af');else btn.classList.remove('af');}
+  });
+  ['ov-fAsset','ov-fRecharge'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el.value)el.classList.add('af');else el.classList.remove('af');
+  });
+}
+
+
+
+function updateBadge(d){
+  var saved='';
+  try{var s=sessionStorage.getItem('maint_saved');if(s)saved=' &nbsp;|&nbsp; updated '+s;}catch(ex){}
+  var note=OV_IDX?'':' &nbsp;<span style="color:var(--accent2)">(load file to enable date filters)</span>';
+  document.getElementById('dataBadge').innerHTML=d.date_range[0]+' &#8211; '+d.date_range[1]+'&nbsp;|&nbsp;<span>'+d.total_rows.toLocaleString()+'</span> records'+saved+note;
+}
+
+
+function updateKPIs(d){
+  var months=d.monthly_total?d.monthly_total.length:1;months=months||1;
+  document.getElementById('kpiTotal').textContent=fmt(d.grand_total);
+  document.getElementById('kpiMonthly').textContent=fmt(d.grand_total/months);
+  document.getElementById('kpiJobs').textContent=d.total_jobs.toLocaleString();
+  document.getElementById('kpiAvgJob').textContent=d.total_jobs>0?fmt(d.grand_total/d.total_jobs):'$0';
+  document.getElementById('kpiRecharge').textContent=fmt(d.recharge_total);
+  document.getElementById('kpiSub1').textContent=d.date_range[0]+' to '+d.date_range[1];
+  document.getElementById('kpiSub2').textContent='Across '+months+' months';
+  document.getElementById('kpiSub5').textContent=d.grand_total>0?((d.recharge_total/d.grand_total)*100).toFixed(1)+'% of total':'—';
+}
+
+
+function renderMonthlyCG(d,tm){
+  kill('cMonthlyCG');
+  var isWk=tm==='week';
+  var src=isWk?(d.weekly_cg||[]):d.monthly_cg;
+  var periodKey=isWk?'week':'month';
+  var periods=src.map(function(r){return r[periodKey];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var groups=src.map(function(r){return r.costGroup;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var datasets=groups.map(function(g){return{label:g,data:periods.map(function(p){var f=src.find(function(r){return r[periodKey]===p&&r.costGroup===g;});return f?f.total:0;}),backgroundColor:CG_COLORS[g]||'#6b7280',borderWidth:0,borderRadius:2};});
+  document.getElementById('cgLegend').innerHTML=groups.map(function(g){return '<div class="legend-item"><div class="legend-dot" style="background:'+(CG_COLORS[g]||'#6b7280')+'"></div>'+g+'</div>';}).join('');
+  charts.cMonthlyCG=new Chart(document.getElementById('cMonthlyCG').getContext('2d'),{type:'bar',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtFull(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+
+function renderCGDonut(d){
+  kill('cCGDonut');
+  var sorted=d.by_cg.slice().sort(function(a,b){return b.total-a.total;});
+  charts.cCGDonut=new Chart(document.getElementById('cCGDonut').getContext('2d'),{type:'doughnut',data:{labels:sorted.map(function(r){return r.costGroup;}),datasets:[{data:sorted.map(function(r){return r.total;}),backgroundColor:sorted.map(function(r){return CG_COLORS[r.costGroup]||'#6b7280';}),borderWidth:2,borderColor:'#13161e'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fmtFull(c.parsed);}}}}}});
+}
+
+
+function renderTypeDonut(d){
+  kill('cTypeBar');
+  var sorted=d.by_type.slice().sort(function(a,b){return b.total-a.total;});
+  charts.cTypeBar=new Chart(document.getElementById('cTypeBar').getContext('2d'),{type:'doughnut',data:{labels:sorted.map(function(r){return r.type;}),datasets:[{data:sorted.map(function(r){return r.total;}),backgroundColor:sorted.map(function(r){return TYPE_COLORS[r.type]||'#6b7280';}),borderWidth:2,borderColor:'#13161e'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+fmtFull(c.parsed);}}}}}});
+}
+
+
+
+function renderMonthlyType(d,tm){
+  kill('cMonthlyType');
+  var isWk=tm==='week';
+  var src=isWk?(d.weekly_type||[]):d.monthly_type;
+  var periodKey=isWk?'week':'month';
+  var periods=src.map(function(r){return r[periodKey];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var types=src.map(function(r){return r.type;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var datasets=types.map(function(t){return{label:t,data:periods.map(function(p){var f=src.find(function(r){return r[periodKey]===p&&r.type===t;});return f?f.total:0;}),backgroundColor:TYPE_COLORS[t]||'#6b7280',borderWidth:0,borderRadius:2};});
+  var typeLegend=document.getElementById('typeLegend');
+  if(typeLegend)typeLegend.innerHTML=types.map(function(t){return '<div class="legend-item"><div class="legend-dot" style="background:'+(TYPE_COLORS[t]||'#6b7280')+'"></div>'+t+'</div>';}).join('');
+  charts.cMonthlyType=new Chart(document.getElementById('cMonthlyType').getContext('2d'),{type:'bar',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtFull(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+
+function renderRecharge(d){
+  var total=d.by_recharge.reduce(function(s,r){return s+r.total;},0)||1;
+  document.getElementById('rechargeSplit').innerHTML=d.by_recharge.map(function(r){
+    var pct=(r.total/total*100).toFixed(1);
+    var color=r.recharge==='Y'?'#10b981':'#e05a2b';
+    return '<div class="rs-item"><div class="rs-label">'+(r.recharge==='Y'?'&#10003; Recharged':'&#10007; Non-Recharged')+'</div><div class="rs-value" style="color:'+color+'">'+fmtFull(r.total)+'</div><div class="rs-pct">'+pct+'% of total</div></div>';
+  }).join('');
+  kill('cRecharge');
+  charts.cRecharge=new Chart(document.getElementById('cRecharge').getContext('2d'),{type:'doughnut',data:{labels:d.by_recharge.map(function(r){return r.recharge==='Y'?'Recharged':'Non-Recharged';}),datasets:[{data:d.by_recharge.map(function(r){return r.total;}),backgroundColor:['#e05a2b','#10b981'],borderWidth:2,borderColor:'#13161e'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.parsed);}}}}}});
+}
+
+
+function renderJobs(d,tm){
+  kill('cJobs');
+  var isWk=tm==='week';
+  var src=isWk?(d.jobs_week||[]):d.jobs_month;
+  var periodKey=isWk?'week':'month';
+  charts.cJobs=new Chart(document.getElementById('cJobs').getContext('2d'),{type:'line',data:{labels:src.map(function(r){return r[periodKey];}),datasets:[{label:'Jobs',data:src.map(function(r){return r.jobs;}),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxRotation:45,font:{size:9}}},y:{grid:{color:'#252a38'}}}}});
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPOT FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function dpPopulateDateFilters(idx){
+  msBuild('fYear',idx.years,'All Years',dpOnYearChange,[]);
+  msBuild('fMonth',idx.months,'All Months',dpGo,['fWeek']);
+  msBuild('fWeek',idx.weeks,'All Weeks',dpGo,['fMonth']);
+  fillSel('fD',idx.all.depots||[],'All Depots',function(v){return 'Depot '+v;});
+  msBuild('fT',idx.all.types||[],'All Work Types',dpGo,[]);
+  msBuild('fG',idx.all.cost_groups||[],'All Cost Groups',dpGo,[]);
+}
+
+
+
+function dpOnYearChange(){
+  var yrs=msVals('fYear');
+  var selMos=msVals('fMonth');var selWks=msVals('fWeek');
+  if(!DP_IDX){dpGo();return;}
+  var months=DP_IDX.months,weeks=DP_IDX.weeks;
+  if(yrs.length){
+    months=DP_IDX.months.filter(function(m){return yrs.indexOf(m.split('-')[0])!==-1;});
+    weeks=DP_IDX.weeks.filter(function(w){return yrs.indexOf(w.split('-')[0])!==-1;});
+    selMos=selMos.filter(function(m){return months.indexOf(m)!==-1;});
+    selWks=selWks.filter(function(w){return weeks.indexOf(w)!==-1;});
+  }
+  MS['fMonth']=new Set(selMos);MS['fWeek']=new Set(selWks);
+  msBuild('fMonth',months,'All Months',dpGo,['fWeek']);
+  msBuild('fWeek',weeks,'All Weeks',dpGo,['fMonth']);
+  dpGo();
+}
+
+
+function dpGetF(){
+  return{
+    years:msVals('fYear'),months:msVals('fMonth'),weeks:msVals('fWeek'),
+    D:document.getElementById('fD').value,
+    Ts:msVals('fT'),
+    Gs:msVals('fG'),
+    R:document.getElementById('fR').value
+  };
+}
+
+
+
+function dpGo(){
+  var f=dpGetF();
+  var base=DP_IDX?resolveDepotAgg(DP_IDX,f.years,f.months,f.weeks):(DP_SEED);
+  var data=applyDepotFilters(base,f);
+  var tm=f.weeks&&f.weeks.length?'week':'month';
+  renderBadge(data);renderKPIs(data,f);renderStrip(f.D,base,data);
+  renderMD(data,tm);renderDB(data);renderCG(data,tm);renderDT(data);renderRC(data);
+  renderDMT(data,f.D,tm);renderAssets(data,f.D);renderDJ(data,tm);
+  ['fD','fR'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el.value)el.classList.add('af');else el.classList.remove('af');
+  });
+  ['fT','fG'].forEach(function(id){
+    var btn=document.getElementById(id+'-btn');
+    if(btn){if(msVals(id).length)btn.classList.add('af');else btn.classList.remove('af');}
+  });
+}
+
+
+
+function renderBadge(data){
+  var saved='';try{var s=sessionStorage.getItem('maint_saved');if(s)saved=' | updated '+s;}catch(ex){}
+  var note=DP_IDX?'':' <span style="color:var(--acc2)">(load file to enable date filters)</span>';
+  document.getElementById('dataBadge').innerHTML=data.date_range[0]+' &#8211; '+data.date_range[1]+' | <b>'+data.total_rows.toLocaleString()+'</b> records'+saved+note;
+}
+
+
+function renderKPIs(data,f){
+  var ms=new Set(data.monthly_depot.map(function(r){return r.month;}));
+  var nm=Math.max(1,ms.size);
+  document.getElementById('k0').textContent=fmt(data.grand_total);
+  document.getElementById('k0s').textContent=f.D?'Depot '+f.D:'All depots';
+  document.getElementById('k1').textContent=fmt(data.grand_total/nm);
+  document.getElementById('k1s').textContent='Across '+nm+' months';
+  document.getElementById('k2').textContent=data.total_jobs.toLocaleString();
+  document.getElementById('k3').textContent=data.total_jobs>0?fmt(data.grand_total/data.total_jobs):'$0';
+  document.getElementById('k4').textContent=fmt(data.recharge_total);
+  document.getElementById('k4s').textContent=data.grand_total>0?((data.recharge_total/data.grand_total)*100).toFixed(1)+'% of total':'—';
+}
+
+
+function renderStrip(selD,baseData,filteredData){
+  // Use filteredData for values (reflects type/CG filters), baseData for colour order only
+  var base=baseData||(DP_IDX?DP_IDX.all:DP_SEED);
+  var display=filteredData||base;
+  var allDepots=base.by_depot;  // full depot list for consistent colours
+  var rcm={};(display.depot_recharge||[]).forEach(function(r){rcm[r.depot]=r.recharge_total;});
+  var gt=display.grand_total||1;
+  // Build a cost lookup from filtered data
+  var costMap={};(display.by_depot||[]).forEach(function(r){costMap[r.depot]=r.total;});
+  document.getElementById('dstrip').innerHTML=allDepots.map(function(dr,ix){
+    var col=dc(ix);
+    var filteredTotal=costMap[dr.depot]||0;
+    var rc=rcm[dr.depot]||0;
+    var pct=gt>0?(filteredTotal/gt*100).toFixed(1):'0.0';
+    var on=dr.depot===selD?' sel':'';
+    return '<div class="dcard'+on+'" style="border-top:3px solid '+col+'" onclick="clickD(\''+dr.depot+'\')">'
+      +'<div class="dlbl">Depot '+dr.depot+'</div><div class="dval" style="color:'+col+'">'+fmt(filteredTotal)+'</div>'
+      +'<div class="dpct">'+pct+'% of total</div>'+(rc>0?'<div class="drc">&#8634; '+fmt(rc)+'</div>':'')+'</div>';
+  }).join('');
+}
+
+
+
+function clickD(dep){var sel=document.getElementById('fD');sel.value=sel.value===dep?'':dep;dpGo();}
+
+
+function renderMD(data,tm){
+  kill('cMD');
+  var isWk=tm==='week';
+  var src=isWk?(data.weekly_depot||[]):data.monthly_depot;
+  var pk=isWk?'week':'month';
+  var periods=src.map(function(r){return r[pk];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var depots=data.depots;
+  var allD=(DP_IDX?DP_IDX.all:DP_SEED).depots;
+  var datasets=depots.map(function(dep){var ix=allD.indexOf(dep);return{label:'D'+dep,data:periods.map(function(p){var f=src.find(function(r){return r[pk]===p&&r.depot===dep;});return f?f.total:0;}),backgroundColor:dc(ix),borderWidth:0,borderRadius:2};});
+  document.getElementById('leg1').innerHTML=depots.map(function(dep){var ix=allD.indexOf(dep);return '<div class="li"><div class="ld" style="background:'+dc(ix)+'"></div>D'+dep+'</div>';}).join('');
+  charts.cMD=new Chart(document.getElementById('cMD').getContext('2d'),{type:'bar',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtF(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+
+function renderDB(data){
+  kill('cDB');
+  var sorted=data.by_depot.slice().sort(function(a,b){return b.total-a.total;});
+  var allD=(DP_IDX?DP_IDX.all:DP_SEED).depots;
+  charts.cDB=new Chart(document.getElementById('cDB').getContext('2d'),{type:'bar',data:{labels:sorted.map(function(r){return 'Depot '+r.depot;}),datasets:[{data:sorted.map(function(r){return r.total;}),backgroundColor:sorted.map(function(r){return dc(allD.indexOf(r.depot));}),borderWidth:0,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtF(c.parsed.x);}}}},scales:{x:{grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}},y:{grid:{display:false}}}}});
+}
+
+
+function renderCG(data,tm){
+  kill('cCG');
+  var isWk=tm==='week';
+  var src=isWk?(data.depot_weekly_cg||[]):(data.depot_monthly_cg||[]);
+  var pk=isWk?'week':'month';
+  // If a depot is selected, src is already filtered; otherwise sum across all depots
+  var periods=src.map(function(r){return r[pk];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var groups=src.map(function(r){return r.costGroup;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var datasets=groups.map(function(g){
+    return{label:g,data:periods.map(function(p){
+      var tot=0;src.forEach(function(r){if(r[pk]===p&&r.costGroup===g)tot+=r.total;});
+      return Math.round(tot*100)/100;
+    }),backgroundColor:CG_COLORS[g]||'#6b7280',borderWidth:0,borderRadius:2};
+  });
+  charts.cCG=new Chart(document.getElementById('cCG').getContext('2d'),{type:'bar',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtF(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+
+function renderDT(data){
+  kill('cDT');
+  var depots=data.depots;
+  var types=data.depot_type.map(function(r){return r.type;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var datasets=types.map(function(t){return{label:t,data:depots.map(function(dep){var f=data.depot_type.find(function(r){return r.depot===dep&&r.type===t;});return f?f.total:0;}),backgroundColor:TYPE_COLORS[t]||'#6b7280',borderWidth:0,borderRadius:3};});
+  charts.cDT=new Chart(document.getElementById('cDT').getContext('2d'),{type:'bar',data:{labels:depots.map(function(d2){return 'D'+d2;}),datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtF(c.parsed.y);}}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+function renderRC(data){
+  kill('cRC');
+  var depots=(DP_IDX?DP_IDX.all:DP_SEED).depots;
+  var totM={};data.by_depot.forEach(function(r){totM[r.depot]=r.total;});
+  var rcM={};data.depot_recharge.forEach(function(r){rcM[r.depot]=r.recharge_total;});
+  charts.cRC=new Chart(document.getElementById('cRC').getContext('2d'),{type:'bar',data:{labels:depots.map(function(d2){return 'D'+d2;}),datasets:[{label:'Net',data:depots.map(function(dep){return Math.max(0,(totM[dep]||0)-(rcM[dep]||0));}),backgroundColor:'#3b82f6',borderWidth:0,borderRadius:2,stack:'s'},{label:'Recharged',data:depots.map(function(dep){return rcM[dep]||0;}),backgroundColor:'#10b981',borderWidth:0,borderRadius:2,stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtF(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+function renderDMT(data,selD,tm){
+  kill('cDMT');
+  var isWk=tm==='week';
+  var pk=isWk?'week':'month';
+  var srcField=isWk?'depot_weekly_type':'depot_monthly_type';
+  var rows;var subtitle;
+  if(selD){
+    rows=(data[srcField]||[]).filter(function(r){return r.depot===selD;});
+    subtitle='Depot '+selD+(isWk?' — weekly':' — monthly');
+  } else {
+    var agg2={};
+    (data[srcField]||[]).forEach(function(r){var k=r[pk]+'|'+r.type;agg2[k]=(agg2[k]||0)+r.total;});
+    var obj={};
+    Object.keys(agg2).forEach(function(k){obj[k]=agg2[k];});
+    rows=Object.keys(obj).sort().map(function(k){var p=k.split('|');var o={type:p[1],total:obj[k]};o[pk]=p[0];return o;});
+    subtitle='All depots combined'+(isWk?' — weekly':' — monthly');
+  }
+  var periods=rows.map(function(r){return r[pk];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var types=rows.map(function(r){return r.type;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var datasets=types.map(function(t){return{label:t,data:periods.map(function(p){var f=rows.find(function(r){return r[pk]===p&&r.type===t;});return f?f.total:0;}),backgroundColor:TYPE_COLORS[t]||'#6b7280',borderWidth:0,borderRadius:2};});
+  document.getElementById('dmtSub').textContent=subtitle;
+  charts.cDMT=new Chart(document.getElementById('cDMT').getContext('2d'),{type:'bar',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtF(c.parsed.y);}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},y:{stacked:true,grid:{color:'#252a38'},ticks:{callback:function(v){return fmt(v);}}}}}});
+}
+
+
+
+function renderAssets(data,selD){
+  var assets=data.depot_asset.filter(function(r){return !selD||r.depot===selD;}).slice().sort(function(a,b){return b.total-a.total;}).slice(0,20);
+  var maxV=assets.length?Math.max.apply(null,assets.map(function(r){return r.total;})):1;
+  document.getElementById('atSub').textContent=selD?'Depot '+selD+' — top 20':'All depots — top 20';
+  document.getElementById('atbody').innerHTML=assets.length?assets.map(function(r){
+    var pct=Math.round(r.total/maxV*100);
+    return '<tr><td><span class="btag">'+r.itemNo+'</span></td><td style="font-size:11px">'+r.itemDesc+'</td><td class="cc">'+fmtF(r.total)+'</td><td><span class="mbar" style="width:'+pct+'px"></span><span style="font-size:10px;color:var(--mut);margin-left:5px">'+pct+'%</span></td></tr>';
+  }).join(''):'<tr><td colspan="4" style="color:var(--mut);padding:14px">No data</td></tr>';
+}
+
+
+function renderDJ(data,tm){
+  kill('cDJ');
+  var isWk=tm==='week';
+  var src=isWk?(data.depot_jobs_week||[]):data.depot_jobs;
+  var pk=isWk?'week':'month';
+  var periods=src.map(function(r){return r[pk];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var depots=data.depots;
+  var allD=(DP_IDX?DP_IDX.all:DP_SEED).depots;
+  var datasets=depots.map(function(dep){var ix=allD.indexOf(dep);return{label:'D'+dep,data:periods.map(function(p){var f=src.find(function(r){return r[pk]===p&&r.depot===dep;});return f?f.jobs:0;}),borderColor:dc(ix),backgroundColor:'transparent',tension:.4,pointRadius:3,borderWidth:2};});
+  document.getElementById('leg2').innerHTML=depots.map(function(dep){var ix=allD.indexOf(dep);return '<div class="li"><div class="ld" style="background:'+dc(ix)+';border-radius:50%"></div>D'+dep+'</div>';}).join('');
+  charts.cDJ=new Chart(document.getElementById('cDJ').getContext('2d'),{type:'line',data:{labels:periods,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxRotation:45,font:{size:9}}},y:{grid:{color:'#252a38'}}}}});
+}
+
+
+
+function initNoIDX(){
+  DP_IDX=null;
+  msBuild('fYear',[],'All Years',dpOnYearChange,[]);
+  msBuild('fMonth',[],'All Months',dpGo,['fWeek']);
+  msBuild('fWeek',[],'All Weeks',dpGo,['fMonth']);
+  fillSel('fD',DP_SEED.depots||[],'All Depots',function(v){return 'Depot '+v;});
+  msBuild('fT',DP_SEED.types||[],'All Work Types',dpGo,[]);
+  msBuild('fG',DP_SEED.cost_groups||[],'All Cost Groups',dpGo,[]);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UPLOAD HANDLER
+// ═══════════════════════════════════════════════════════════════════════════
+function handleUpload(event){
+  var file=event.target.files[0];if(!file)return;
+  var overlay=document.getElementById('loadingOverlay');
+  var msg=document.getElementById('loadingMsg');
+  overlay.classList.add('active');msg.textContent='Reading file...';
+  var reader=new FileReader();
+  reader.onload=function(e){
+    setTimeout(function(){
+      try{
+        msg.textContent='Parsing rows...';
+        var wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        msg.textContent='Pre-processing '+rows.length.toLocaleString()+' rows...';
+        setTimeout(function(){
+          try{
+            rows.forEach(function(r){parseDt(r);if(!r._depot)r._depot=r['Job No.']?String(r['Job No.']).split('/')[0].trim():'';});
+            msg.textContent='Building overview index...';
+            setTimeout(function(){
+              try{
+                OV_IDX=buildIDX(rows);
+                msg.textContent='Building depot index...';
+                setTimeout(function(){
+                  try{
+                    DP_IDX=buildDepotIDX(rows);
+                    var saved=new Date().toLocaleDateString('en-AU');
+                    try{
+                      sessionStorage.setItem('maint_ov_idx',JSON.stringify(OV_IDX));
+                      sessionStorage.setItem('maint_depot_idx',JSON.stringify(DP_IDX));
+                      sessionStorage.setItem('maint_saved',saved);
+                    }catch(se){
+                      console.error('sessionStorage save FAILED:',se.message);
+                      alert('Warning: data could not be saved to session storage ('+se.message+'). Filters will work this session only.');
+                    }
+                    ovPopulateDateFilters(OV_IDX);
+                    dpPopulateDateFilters(DP_IDX);
+                    render();dpGo();
+                  }catch(err){alert('Depot index error: '+err.message);}
+                  finally{overlay.classList.remove('active');event.target.value='';}
+                },50);
+              }catch(err){alert('Overview index error: '+err.message);overlay.classList.remove('active');event.target.value='';}
+            },50);
+          }catch(err){alert('Pre-process error: '+err.message);overlay.classList.remove('active');event.target.value='';}
+        },50);
+      }catch(err){alert('File read error: '+err.message);overlay.classList.remove('active');event.target.value='';}
+    },50);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPOT EVENT WIRING
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('fD').onchange=dpGo;
+document.getElementById('fR').onchange=dpGo;
+document.getElementById('resetBtn').onclick=function(){
+  ['fYear','fMonth','fWeek','fT','fG'].forEach(function(id){
+    msClearAll(id);
+    var btn=document.getElementById(id+'-btn');
+    if(btn)msRefreshBtn(id,btn.dataset.ph||'');
+    var drop=document.getElementById(id+'-drop');
+    if(drop)drop.querySelectorAll('input').forEach(function(c){c.checked=false;c.parentElement.className='';});
+  });
+  ['fD','fR'].forEach(function(id){document.getElementById(id).value='';});
+  if(DP_IDX)dpPopulateDateFilters(DP_IDX);
+  dpGo();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT — load from sessionStorage or show seed
+// ═══════════════════════════════════════════════════════════════════════════
+function validateIDX(p){return p&&p.by_year&&p.by_month&&p.by_week&&p.all;}
+
+try{
+  var _ov=sessionStorage.getItem('maint_ov_idx');
+  var _dp=sessionStorage.getItem('maint_depot_idx');
+  if(_ov&&_dp){
+    var _povp=JSON.parse(_ov);
+    var _pdpp=JSON.parse(_dp);
+    if(validateIDX(_povp)&&validateIDX(_pdpp)){
+      OV_IDX=_povp;DP_IDX=_pdpp;
+      ovPopulateDateFilters(OV_IDX);
+      dpPopulateDateFilters(DP_IDX);
+    } else {
+      try{sessionStorage.removeItem('maint_ov_idx');sessionStorage.removeItem('maint_depot_idx');}catch(ce){}
+      initNoIDX();
+      msBuild('ov-fYear',[],'All Years',ovOnYearChange,[]);
+      msBuild('ov-fMonth',[],'All Months',render,['ov-fWeek']);
+      msBuild('ov-fWeek',[],'All Weeks',render,['ov-fMonth']);
+      msBuild('ov-fType',OV_SEED.types||[],'All Work Types',render,[]);
+      msBuild('ov-fCG',OV_SEED.cost_groups||[],'All Cost Groups',render,[]);
+      fillSel('ov-fAsset',OV_SEED.assets||[],'All Asset Types');
+    }
+  } else {
+    initNoIDX();
+    msBuild('ov-fYear',[],'All Years',ovOnYearChange,[]);
+    msBuild('ov-fMonth',[],'All Months',render,['ov-fWeek']);
+    msBuild('ov-fWeek',[],'All Weeks',render,['ov-fMonth']);
+    msBuild('ov-fType',OV_SEED.types||[],'All Work Types',render,[]);
+    msBuild('ov-fCG',OV_SEED.cost_groups||[],'All Cost Groups',render,[]);
+    fillSel('ov-fAsset',OV_SEED.assets||[],'All Asset Types');
+  }
+}catch(ex){
+  initNoIDX();
+  msBuild('ov-fYear',[],'All Years',ovOnYearChange,[]);
+  msBuild('ov-fMonth',[],'All Months',render,['ov-fWeek']);
+  msBuild('ov-fWeek',[],'All Weeks',render,['ov-fMonth']);
+  msBuild('ov-fType',[],'All Work Types',render,[]);
+  msBuild('ov-fCG',[],'All Cost Groups',render,[]);
+}
+render();
+dpGo();
+
+</script>
+</body>
+</html>
