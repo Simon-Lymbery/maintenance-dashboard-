@@ -202,6 +202,20 @@ main{padding:24px 28px;display:flex;flex-direction:column;gap:20px;}
       </div>
     </div>
 
+
+    <div class="section-title">Recharge Analysis</div>
+    <div class="chart-row half">
+      <div class="card" style="gap:16px">
+        <div class="card-header"><div><div class="card-title">Recharge vs Non-Recharge</div><div class="card-sub">Cost split by recharge flag</div></div></div>
+        <div class="recharge-split" id="rechargeSplit"></div>
+        <div style="position:relative;height:180px"><canvas id="cRecharge"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Jobs per Work Type</div><div class="card-sub">Unique job count per period by work type</div></div><div class="legend" id="jobsLegend"></div></div>
+        <div style="position:relative;height:220px"><canvas id="cJobs"></canvas></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -256,19 +270,6 @@ main{padding:24px 28px;display:flex;flex-direction:column;gap:20px;}
       </div>
       <div class="card"><div><div class="card-title">Monthly Jobs per Depot</div><div class="card-sub">Unique job count</div></div><div class="leg" id="leg2"></div><div style="position:relative;height:280px"><canvas id="cDJ"></canvas></div></div>
 
-    <div class="section-title">Recharge Analysis</div>
-    <div class="chart-row half">
-      <div class="card" style="gap:16px">
-        <div class="card-header"><div><div class="card-title">Recharge vs Non-Recharge</div><div class="card-sub">Cost split by recharge flag</div></div></div>
-        <div class="recharge-split" id="rechargeSplit"></div>
-        <div style="position:relative;height:180px"><canvas id="cRecharge"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div><div class="card-title">Monthly Jobs Volume</div><div class="card-sub">Unique job count per period</div></div></div>
-        <div style="position:relative;height:220px"><canvas id="cJobs"></canvas></div>
-      </div>
-    </div>
-    </div>
   </main>
 </div>
 
@@ -387,7 +388,7 @@ function dc(ix){return DC[ix%DC.length];}
 // ═══════════════════════════════════════════════════════════════════════════
 function buildAgg(rows,inclFull){
   var mTotal={},mCG={},mType={},wCG={},wType={};
-  var mCGType={},bCGType={},bRCType={};
+  var mCGType={},bCGType={},bRCType={},mRCType={},wRCType={};
   var bType={},bCG={},bRecharge={},jm={},jwk={},jtm={},jmt={},jwkt={},asMap={};
   var gt=0,rt=0,jobSet=new Set();
   rows.forEach(function(r){
@@ -404,6 +405,8 @@ function buildAgg(rows,inclFull){
     var mctk=mo+'|'+cg+'|'+ty; mCGType[mctk]=(mCGType[mctk]||0)+cost;
     var bctk=cg+'|'+ty;        bCGType[bctk]=(bCGType[bctk]||0)+cost;
     var brtk=rc+'|'+ty;        bRCType[brtk]=(bRCType[brtk]||0)+cost;
+    var mRCk=mo+'|'+rc+'|'+ty; mRCType[mRCk]=(mRCType[mRCk]||0)+cost;
+    var wRCk=wk+'|'+rc+'|'+ty; wRCType[wRCk]=(wRCType[wRCk]||0)+cost;
     bType[ty]=(bType[ty]||0)+cost;
     bCG[cg]=(bCG[cg]||0)+cost;
     bRecharge[rc]=(bRecharge[rc]||0)+cost;
@@ -425,7 +428,9 @@ function buildAgg(rows,inclFull){
   var weekly_type    =toArr(wType,  function(k){var p=k.split('|');return{week:p[0],type:p[1]};});
   var monthly_cg_type=toArr(mCGType,function(k){var p=k.split('|');return{month:p[0],costGroup:p[1],type:p[2]};});
   var by_cg_type     =toArr(bCGType,function(k){var p=k.split('|');return{costGroup:p[0],type:p[1]};});
-  var by_recharge_type=toArr(bRCType,function(k){var p=k.split('|');return{recharge:p[0],type:p[1]};});
+  var by_recharge_type  =toArr(bRCType, function(k){var p=k.split('|');return{recharge:p[0],type:p[1]};});
+  var monthly_rc_type   =toArr(mRCType, function(k){var p=k.split('|');return{month:p[0],recharge:p[1],type:p[2]};});
+  var weekly_rc_type    =toArr(wRCType, function(k){var p=k.split('|');return{week:p[0],recharge:p[1],type:p[2]};});
   var by_type        =toArr(bType,    function(k){return{type:k};});
   var by_cg          =toArr(bCG,      function(k){return{costGroup:k};});
   var by_recharge    =toArr(bRecharge,function(k){return{recharge:k};});
@@ -442,17 +447,18 @@ function buildAgg(rows,inclFull){
     // Time-series — always included
     monthly_total:monthly_total,monthly_cg:monthly_cg,monthly_type:monthly_type,
     weekly_cg:weekly_cg,weekly_type:weekly_type,
+    monthly_cg_type:monthly_cg_type,
+    monthly_rc_type:monthly_rc_type,weekly_rc_type:weekly_rc_type,
     jobs_month:jobs_month,jobs_week:jobs_week,
     // Cross arrays — only in all bucket
-    monthly_cg_type:inclFull?monthly_cg_type:[],
+    // (monthly_cg_type moved to time-series section above)
     by_cg_type:inclFull?by_cg_type:[],
     by_recharge_type:inclFull?by_recharge_type:[],
     by_type:inclFull?by_type:[],
     by_cg:inclFull?by_cg:[],
     by_recharge:inclFull?by_recharge:[],
+    jobs_month_type:jobs_month_type,jobs_week_type:jobs_week_type,
     jobs_by_type:inclFull?jobs_by_type:[],
-    jobs_month_type:inclFull?jobs_month_type:[],
-    jobs_week_type:inclFull?jobs_week_type:[],
     by_asset:inclFull?by_asset:[],
     by_asset_type:inclFull?by_asset_type:[],
     grand_total:Math.round(gt*100)/100,recharge_total:Math.round(rt*100)/100,
@@ -474,6 +480,8 @@ function mergeAggs(aggs){
   var result={};var first=aggs[0];
   result.monthly_total    =mArr(aggs.map(function(a){return a.monthly_total;}),    function(r){return r.month;});
   result.monthly_cg       =mArr(aggs.map(function(a){return a.monthly_cg;}),       function(r){return r.month+'|'+r.costGroup;});
+  result.monthly_rc_type  =mArr(aggs.map(function(a){return a.monthly_rc_type||[];}),function(r){return r.month+'|'+r.recharge+'|'+r.type;});
+  result.weekly_rc_type   =mArr(aggs.map(function(a){return a.weekly_rc_type||[];}), function(r){return r.week+'|'+r.recharge+'|'+r.type;});
   result.monthly_type     =mArr(aggs.map(function(a){return a.monthly_type;}),     function(r){return r.month+'|'+r.type;});
   result.weekly_cg        =mArr(aggs.map(function(a){return a.weekly_cg||[];}),    function(r){return r.week+'|'+r.costGroup;});
   result.weekly_type      =mArr(aggs.map(function(a){return a.weekly_type||[];}),  function(r){return r.week+'|'+r.type;});
@@ -551,75 +559,73 @@ function applyNonDateFilters(agg,f){
   var hasAsset=f.asset&&f.asset.length;
   var hasRC  =f.recharge;
   if(!hasType&&!hasCG&&!hasAsset&&!hasRC)return agg;
-  // Cross arrays only in IDX.all — restore before filtering
+  // For cross-filter lookups use period-scoped arrays from agg where available,
+  // falling back to OV_IDX.all only for arrays not in period buckets
   var src=OV_IDX&&OV_IDX.all?OV_IDX.all:agg;
   var a={};Object.keys(agg).forEach(function(k){a[k]=agg[k];});
-  if(!a.by_type||!a.by_type.length) a.by_type=src.by_type||[];
-  if(!a.by_cg||!a.by_cg.length) a.by_cg=src.by_cg||[];
-  if(!a.by_recharge||!a.by_recharge.length) a.by_recharge=src.by_recharge||[];
-  if(!a.monthly_cg_type||!a.monthly_cg_type.length) a.monthly_cg_type=src.monthly_cg_type||[];
-  if(!a.by_cg_type||!a.by_cg_type.length) a.by_cg_type=src.by_cg_type||[];
-  if(!a.by_recharge_type||!a.by_recharge_type.length) a.by_recharge_type=src.by_recharge_type||[];
-  if(!a.jobs_by_type||!a.jobs_by_type.length) a.jobs_by_type=src.jobs_by_type||[];
-  if(!a.jobs_month_type||!a.jobs_month_type.length) a.jobs_month_type=src.jobs_month_type||[];
-  if(!a.jobs_week_type||!a.jobs_week_type.length) a.jobs_week_type=src.jobs_week_type||[];
-  if(!a.by_asset||!a.by_asset.length) a.by_asset=src.by_asset||[];
-  if(!a.by_asset_type||!a.by_asset_type.length) a.by_asset_type=src.by_asset_type||[];
 
-  // ── Filter each array dimension ───────────────────────────────────────────
   if(hasType){
-    // monthly_type and by_type: direct filter
-    a.by_type    =agg.by_type.filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    // Direct-dimension filters (time-series arrays from agg - period-scoped)
+    a.by_type     =src.by_type.filter(function(r){return f.types.indexOf(r.type)!==-1;});
     a.monthly_type=(agg.monthly_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
     a.weekly_type =(agg.weekly_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
-    // Derive monthly_cg filtered by type using cross array
+
+    // monthly_cg filtered by type — use period-scoped monthly_cg_type from agg
     var mctSrc=(agg.monthly_cg_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
     var mCGmap={};mctSrc.forEach(function(r){var k=r.month+'|'+r.costGroup;mCGmap[k]=(mCGmap[k]||0)+r.total;});
     a.monthly_cg=Object.keys(mCGmap).sort().map(function(k){var p=k.split('|');return{month:p[0],costGroup:p[1],total:Math.round(mCGmap[k]*100)/100};});
-    // Derive by_cg filtered by type
-    var bctSrc=(agg.by_cg_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
-    var bCGmap={};bctSrc.forEach(function(r){bCGmap[r.costGroup]=(bCGmap[r.costGroup]||0)+r.total;});
+
+    // by_cg summed from period-scoped monthly_cg_type
+    var bCGmap={};mctSrc.forEach(function(r){bCGmap[r.costGroup]=(bCGmap[r.costGroup]||0)+r.total;});
     a.by_cg=Object.keys(bCGmap).sort().map(function(k){return{costGroup:k,total:Math.round(bCGmap[k]*100)/100};});
-    // Derive by_recharge filtered by type
-    var brtSrc=(agg.by_recharge_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
-    var bRCmap={};brtSrc.forEach(function(r){bRCmap[r.recharge]=(bRCmap[r.recharge]||0)+r.total;});
+
+    // by_recharge from period-scoped monthly_rc_type
+    var mRCSrc=(agg.monthly_rc_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    var bRCmap={};mRCSrc.forEach(function(r){bRCmap[r.recharge]=(bRCmap[r.recharge]||0)+r.total;});
     a.by_recharge=Object.keys(bRCmap).sort().map(function(k){return{recharge:k,total:Math.round(bRCmap[k]*100)/100};});
-    // grand_total from filtered by_type
+
+    // grand_total
     a.grand_total=Math.round(a.by_type.reduce(function(s,r){return s+r.total;},0)*100)/100;
+
+    // Jobs: use period-scoped jobs_month_type from agg
+    var jmtSrc=(agg.jobs_month_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    var jwtSrc=(agg.jobs_week_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
+    a.jobs_month_type=jmtSrc;
+    a.jobs_week_type =jwtSrc;
+    // total_jobs: sum unique across types per month then sum months
+    var jobMonthMap={};jmtSrc.forEach(function(r){jobMonthMap[r.month]=(jobMonthMap[r.month]||0)+r.jobs;});
+    a.total_jobs=Object.values(jobMonthMap).reduce(function(s,v){return s+v;},0)||
+      (src.jobs_by_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;}).reduce(function(s,r){return s+r.jobs;},0);
+    // jobs_month fallback total
+    a.jobs_month=Object.keys(jobMonthMap).sort().map(function(k){return{month:k,jobs:jobMonthMap[k]};});
+    var jobWeekMap={};jwtSrc.forEach(function(r){jobWeekMap[r.week]=(jobWeekMap[r.week]||0)+r.jobs;});
+    a.jobs_week=Object.keys(jobWeekMap).sort().map(function(k){return{week:k,jobs:jobWeekMap[k]};});
   }
 
   if(hasCG){
-    a.by_cg     =a.by_cg.filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
-    a.monthly_cg=(a.monthly_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
+    a.by_cg     =(a.by_cg||src.by_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
+    a.monthly_cg=(a.monthly_cg||agg.monthly_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
     a.weekly_cg =(agg.weekly_cg||[]).filter(function(r){return f.cgs.indexOf(r.costGroup)!==-1;});
     if(!hasType) a.grand_total=Math.round(a.by_cg.reduce(function(s,r){return s+r.total;},0)*100)/100;
   }
 
   if(hasRC){
-    a.by_recharge=(a.by_recharge||agg.by_recharge).filter(function(r){return r.recharge===f.recharge;});
+    a.by_recharge=(a.by_recharge||src.by_recharge||[]).filter(function(r){return r.recharge===f.recharge;});
     if(!hasType&&!hasCG) a.grand_total=Math.round(a.by_recharge.reduce(function(s,r){return s+r.total;},0)*100)/100;
   }
 
   if(hasAsset){
-    a.by_asset     =(agg.by_asset||[]).filter(function(r){return r.itemDesc===f.asset;});
-    a.by_asset_type=(agg.by_asset_type||[]).filter(function(r){return r.itemDesc===f.asset;});
+    a.by_asset     =(src.by_asset||[]).filter(function(r){return r.itemDesc===f.asset;});
+    a.by_asset_type=(src.by_asset_type||[]).filter(function(r){return r.itemDesc===f.asset;});
   }
 
-  // Recompute recharge_total from filtered by_recharge
+  // Recompute recharge_total
   a.recharge_total=Math.round((a.by_recharge||[]).filter(function(r){return r.recharge==='Y';}).reduce(function(s,r){return s+r.total;},0)*100)/100;
-
-  // Filter job counts using pre-computed cross arrays
-  if(hasType){
-    var jbt=(agg.jobs_by_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;});
-    a.total_jobs=jbt.reduce(function(s,r){return s+r.jobs;},0);
-    a.jobs_month=(agg.jobs_month_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;})
-      .reduce(function(acc,r){var ex=acc.find(function(x){return x.month===r.month;});if(ex)ex.jobs+=r.jobs;else acc.push({month:r.month,jobs:r.jobs});return acc;},[]).sort(function(a,b){return a.month<b.month?-1:1;});
-    a.jobs_week=(agg.jobs_week_type||[]).filter(function(r){return f.types.indexOf(r.type)!==-1;})
-      .reduce(function(acc,r){var ex=acc.find(function(x){return x.week===r.week;});if(ex)ex.jobs+=r.jobs;else acc.push({week:r.week,jobs:r.jobs});return acc;},[]).sort(function(a,b){return a.week<b.week?-1:1;});
-  }
 
   return a;
 }
+
+
 
 
 
@@ -946,6 +952,23 @@ function render(){
   var d=applyNonDateFilters(agg,f);
   // timeMode: 'week' when weeks selected, 'month' otherwise
   var tm=f.weeks&&f.weeks.length?'week':'month';
+  // Derive summary arrays from time-series if stripped (period buckets)
+  if(!d.by_cg||!d.by_cg.length){
+    var cgMap={};(d.monthly_cg||[]).forEach(function(r){cgMap[r.costGroup]=(cgMap[r.costGroup]||0)+r.total;});
+    d.by_cg=Object.keys(cgMap).sort().map(function(k){return{costGroup:k,total:Math.round(cgMap[k]*100)/100};});
+  }
+  if(!d.by_type||!d.by_type.length){
+    var tMap={};(d.monthly_type||[]).forEach(function(r){tMap[r.type]=(tMap[r.type]||0)+r.total;});
+    d.by_type=Object.keys(tMap).sort().map(function(k){return{type:k,total:Math.round(tMap[k]*100)/100};});
+  }
+  if(!d.by_recharge||!d.by_recharge.length){
+    var rcMap={};(d.monthly_rc_type||[]).forEach(function(r){rcMap[r.recharge]=(rcMap[r.recharge]||0)+r.total;});
+    d.by_recharge=Object.keys(rcMap).sort().map(function(k){return{recharge:k,total:Math.round(rcMap[k]*100)/100};});
+    // Also recompute recharge_total
+    d.recharge_total=Math.round((rcMap['Y']||0)*100)/100;
+  }
+  // Fallback: if jobs_month_type empty, show total line in renderJobs
+  if(!d.jobs_month_type||!d.jobs_month_type.length){d.jobs_month_type=[];d.jobs_week_type=[];}
   updateBadge(d);updateKPIs(d);
   renderMonthlyCG(d,tm);renderCGDonut(d);renderMonthlyType(d,tm);renderTypeDonut(d);
   renderRecharge(d);renderJobs(d,tm);
@@ -1042,10 +1065,41 @@ function renderRecharge(d){
 function renderJobs(d,tm){
   kill('cJobs');
   var isWk=tm==='week';
-  var src=isWk?(d.jobs_week||[]):d.jobs_month;
-  var periodKey=isWk?'week':'month';
-  charts.cJobs=new Chart(document.getElementById('cJobs').getContext('2d'),{type:'line',data:{labels:src.map(function(r){return r[periodKey];}),datasets:[{label:'Jobs',data:src.map(function(r){return r.jobs;}),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxRotation:45,font:{size:9}}},y:{grid:{color:'#252a38'}}}}});
+  var src=isWk?(d.jobs_week_type||[]):(d.jobs_month_type||[]);
+  var pk=isWk?'week':'month';
+  // If cross arrays are empty (period bucket), fall back to total jobs line
+  if(!src.length){
+    var fallback=isWk?(d.jobs_week||[]):d.jobs_month;
+    charts.cJobs=new Chart(document.getElementById('cJobs').getContext('2d'),{type:'line',
+      data:{labels:fallback.map(function(r){return r[pk];}),
+        datasets:[{label:'All Jobs',data:fallback.map(function(r){return r.jobs;}),
+          borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',
+          fill:true,tension:.4,pointRadius:3,borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{x:{grid:{display:false},ticks:{maxRotation:45,font:{size:9}}},
+          y:{grid:{color:'#252a38'}}}}});
+    return;
+  }
+  var periods=src.map(function(r){return r[pk];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var types=src.map(function(r){return r.type;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
+  var jobLegend=document.getElementById('jobsLegend');
+  if(jobLegend)jobLegend.innerHTML=types.map(function(t){return '<div class="legend-item"><div class="legend-dot" style="background:'+(TYPE_COLORS[t]||'#6b7280')+';border-radius:50%"></div>'+t+'</div>';}).join('');
+  var datasets=types.map(function(t){return{
+    label:t,
+    data:periods.map(function(p){var f=src.find(function(r){return r[pk]===p&&r.type===t;});return f?f.jobs:0;}),
+    borderColor:TYPE_COLORS[t]||'#6b7280',
+    backgroundColor:'transparent',
+    tension:.4,pointRadius:3,borderWidth:2
+  };});
+  charts.cJobs=new Chart(document.getElementById('cJobs').getContext('2d'),{type:'line',
+    data:{labels:periods,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{maxRotation:45,font:{size:9}}},
+        y:{grid:{color:'#252a38'}}}}});
 }
+
 
 
 
@@ -1098,6 +1152,21 @@ function dpGo(){
   var base=DP_IDX?resolveDepotAgg(DP_IDX,f.years,f.months,f.weeks):(DP_SEED);
   var data=applyDepotFilters(base,f);
   var tm=f.weeks&&f.weeks.length?'week':'month';
+  // Derive summary arrays from time-series if stripped (period buckets)
+  if(!data.by_depot||!data.by_depot.length){
+    var depMap={};(data.monthly_depot||[]).forEach(function(r){depMap[r.depot]=(depMap[r.depot]||0)+r.total;});
+    data.by_depot=Object.keys(depMap).sort().map(function(k){return{depot:k,total:Math.round(depMap[k]*100)/100};});
+  }
+  if(!data.depot_type||!data.depot_type.length){
+    var dtMap={};(data.depot_monthly_type||[]).forEach(function(r){var k=r.depot+'|'+r.type;dtMap[k]=(dtMap[k]||0)+r.total;});
+    data.depot_type=Object.keys(dtMap).sort().map(function(k){var p=k.split('|');return{depot:p[0],type:p[1],total:Math.round(dtMap[k]*100)/100};});
+  }
+  if(!data.depot_recharge||!data.depot_recharge.length){
+    // Use DP_IDX.all.depot_recharge scoped to depots present in this period
+    var presentDepots=new Set(data.by_depot.map(function(r){return r.depot;}));
+    var allRC=(DP_IDX&&DP_IDX.all?DP_IDX.all:DP_SEED).depot_recharge||[];
+    data.depot_recharge=allRC.filter(function(r){return presentDepots.has(r.depot);});
+  }
   renderBadge(data);renderKPIs(data,f);renderStrip(f.D,base,data);
   renderMD(data,tm);renderDB(data);renderCG(data,tm);renderDT(data);renderRC(data);
   renderDMT(data,f.D,tm);renderAssets(data,f.D);renderDJ(data,tm);
