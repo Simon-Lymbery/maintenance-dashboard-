@@ -385,7 +385,7 @@ function dc(ix){return DC[ix%DC.length];}
 // ═══════════════════════════════════════════════════════════════════════════
 // OVERVIEW AGG + INDEX
 // ═══════════════════════════════════════════════════════════════════════════
-function buildAgg(rows){
+function buildAgg(rows,inclFull){
   var mTotal={},mCG={},mType={},wCG={},wType={};
   var mCGType={},bCGType={},bRCType={};
   var bType={},bCG={},bRecharge={},jm={},jwk={},jtm={},jmt={},jwkt={},asMap={};
@@ -438,12 +438,23 @@ function buildAgg(rows){
   var atMap={};by_asset.forEach(function(r){atMap[r.itemDesc]=(atMap[r.itemDesc]||0)+r.total;});
   var by_asset_type=Object.keys(atMap).map(function(k){return{itemDesc:k,total:atMap[k]};}).sort(function(a,b){return b.total-a.total;});
   var mos=Object.keys(mTotal).sort();
-  return{monthly_total:monthly_total,monthly_cg:monthly_cg,monthly_type:monthly_type,
+  return{
+    // Time-series — always included
+    monthly_total:monthly_total,monthly_cg:monthly_cg,monthly_type:monthly_type,
     weekly_cg:weekly_cg,weekly_type:weekly_type,
-    monthly_cg_type:monthly_cg_type,by_cg_type:by_cg_type,by_recharge_type:by_recharge_type,
-    by_type:by_type,by_cg:by_cg,by_recharge:by_recharge,
-    jobs_month:jobs_month,jobs_week:jobs_week,jobs_by_type:jobs_by_type,jobs_month_type:jobs_month_type,jobs_week_type:jobs_week_type,
-    by_asset:by_asset,by_asset_type:by_asset_type,
+    jobs_month:jobs_month,jobs_week:jobs_week,
+    // Cross arrays — only in all bucket
+    monthly_cg_type:inclFull?monthly_cg_type:[],
+    by_cg_type:inclFull?by_cg_type:[],
+    by_recharge_type:inclFull?by_recharge_type:[],
+    by_type:inclFull?by_type:[],
+    by_cg:inclFull?by_cg:[],
+    by_recharge:inclFull?by_recharge:[],
+    jobs_by_type:inclFull?jobs_by_type:[],
+    jobs_month_type:inclFull?jobs_month_type:[],
+    jobs_week_type:inclFull?jobs_week_type:[],
+    by_asset:inclFull?by_asset:[],
+    by_asset_type:inclFull?by_asset_type:[],
     grand_total:Math.round(gt*100)/100,recharge_total:Math.round(rt*100)/100,
     total_jobs:jobSet.size,total_rows:rows.length,
     date_range:mos.length?[mos[0],mos[mos.length-1]]:['',''],
@@ -525,10 +536,10 @@ function buildIDX(rows){
     if(wk){if(!byWeek[wk]){byWeek[wk]=[];weeks.push(wk);}byWeek[wk].push(r);}
   });
   years.sort();months.sort();weeks.sort();
-  var idx={years:years,months:months,weeks:weeks,all:buildAgg(rows),by_year:{},by_month:{},by_week:{}};
-  years.forEach(function(y){idx.by_year[y]=buildAgg(byYear[y]);});
-  months.forEach(function(mo){idx.by_month[mo]=buildAgg(byMonth[mo]);});
-  weeks.forEach(function(wk){idx.by_week[wk]=buildAgg(byWeek[wk]);});
+  var idx={years:years,months:months,weeks:weeks,all:buildAgg(rows,true),by_year:{},by_month:{},by_week:{}};
+  years.forEach(function(y){idx.by_year[y]=buildAgg(byYear[y],false);});
+  months.forEach(function(mo){idx.by_month[mo]=buildAgg(byMonth[mo],false);});
+  weeks.forEach(function(wk){idx.by_week[wk]=buildAgg(byWeek[wk],false);});
   return idx;
 }
 
@@ -540,7 +551,20 @@ function applyNonDateFilters(agg,f){
   var hasAsset=f.asset&&f.asset.length;
   var hasRC  =f.recharge;
   if(!hasType&&!hasCG&&!hasAsset&&!hasRC)return agg;
+  // Cross arrays only in IDX.all — restore before filtering
+  var src=OV_IDX&&OV_IDX.all?OV_IDX.all:agg;
   var a={};Object.keys(agg).forEach(function(k){a[k]=agg[k];});
+  if(!a.by_type||!a.by_type.length) a.by_type=src.by_type||[];
+  if(!a.by_cg||!a.by_cg.length) a.by_cg=src.by_cg||[];
+  if(!a.by_recharge||!a.by_recharge.length) a.by_recharge=src.by_recharge||[];
+  if(!a.monthly_cg_type||!a.monthly_cg_type.length) a.monthly_cg_type=src.monthly_cg_type||[];
+  if(!a.by_cg_type||!a.by_cg_type.length) a.by_cg_type=src.by_cg_type||[];
+  if(!a.by_recharge_type||!a.by_recharge_type.length) a.by_recharge_type=src.by_recharge_type||[];
+  if(!a.jobs_by_type||!a.jobs_by_type.length) a.jobs_by_type=src.jobs_by_type||[];
+  if(!a.jobs_month_type||!a.jobs_month_type.length) a.jobs_month_type=src.jobs_month_type||[];
+  if(!a.jobs_week_type||!a.jobs_week_type.length) a.jobs_week_type=src.jobs_week_type||[];
+  if(!a.by_asset||!a.by_asset.length) a.by_asset=src.by_asset||[];
+  if(!a.by_asset_type||!a.by_asset_type.length) a.by_asset_type=src.by_asset_type||[];
 
   // ── Filter each array dimension ───────────────────────────────────────────
   if(hasType){
@@ -604,7 +628,7 @@ function applyNonDateFilters(agg,f){
 // ═══════════════════════════════════════════════════════════════════════════
 // DEPOT AGG + INDEX
 // ═══════════════════════════════════════════════════════════════════════════
-function buildDepotAgg(rows,inclAsset){
+function buildDepotAgg(rows,inclAsset,inclFull){
   var bDepot={},mDepot={},wDepot={},dCG={},dMCG={},dWCG={},dType={},dMType={},dWType={};
   var rcm={},jm={},jwk={},jtm={},jmt={},jwkt={},am={};
   // Cross-dimension: depot+type, depot+cg+type, depot+recharge+type
@@ -660,13 +684,13 @@ function buildDepotAgg(rows,inclAsset){
   var depot_jobs_week_type =Object.keys(jwkt).sort().map(function(k){return{depot:jwkt[k].depot,week:jwkt[k].week,type:jwkt[k].type,jobs:jwkt[k].s.size};});
   var depot_asset=inclAsset?Object.values(am).map(function(x){return{depot:x.depot,itemNo:x.itemNo,itemDesc:x.itemDesc,total:Math.round(x.total*100)/100};}):[];
   var ms=Object.keys(mDepot).map(function(k){return k.split('|')[0];}).filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort();
-  return{by_depot:by_depot,monthly_depot:monthly_depot,weekly_depot:weekly_depot,
-    depot_cg:depot_cg,depot_monthly_cg:depot_monthly_cg,depot_weekly_cg:depot_weekly_cg,depot_type:depot_type,
+  return{by_depot:inclFull?by_depot:[],monthly_depot:monthly_depot,weekly_depot:weekly_depot,
+    depot_cg:inclFull?depot_cg:[],depot_monthly_cg:depot_monthly_cg,depot_weekly_cg:depot_weekly_cg,depot_type:inclFull?depot_type:[],
     depot_monthly_type:depot_monthly_type,depot_weekly_type:depot_weekly_type,
-    depot_type_total:depot_type_total,depot_cg_type:depot_cg_type,depot_rc_type:depot_rc_type,
-    depot_recharge:depot_recharge,depot_jobs:depot_jobs,depot_jobs_week:depot_jobs_week,
-    depot_jobs_type:depot_jobs_type,depot_jobs_month_type:depot_jobs_month_type,depot_jobs_week_type:depot_jobs_week_type,
-    depot_asset:depot_asset,
+    depot_type_total:inclFull?depot_type_total:[],depot_cg_type:inclFull?depot_cg_type:[],depot_rc_type:inclFull?depot_rc_type:[],
+    depot_recharge:inclFull?depot_recharge:[],depot_jobs:depot_jobs,depot_jobs_week:depot_jobs_week,
+    depot_jobs_type:inclFull?depot_jobs_type:[],depot_jobs_month_type:depot_jobs_month_type,depot_jobs_week_type:depot_jobs_week_type,
+    depot_asset:inclFull&&inclAsset?depot_asset:[],
     grand_total:Math.round(gt*100)/100,recharge_total:Math.round(rt*100)/100,
     total_jobs:jobSet.size,total_rows:rows.length,
     date_range:ms.length?[ms[0],ms[ms.length-1]]:['',''],
@@ -688,10 +712,10 @@ function buildDepotIDX(rows){
     if(wk){if(!byWeek[wk]){byWeek[wk]=[];weeks.push(wk);}byWeek[wk].push(r);}
   });
   years.sort();months.sort();weeks.sort();
-  var idx={years:years,months:months,weeks:weeks,all:buildDepotAgg(rows,true),by_year:{},by_month:{},by_week:{}};
-  years.forEach(function(y){idx.by_year[y]=buildDepotAgg(byYear[y],false);});
-  months.forEach(function(mo){idx.by_month[mo]=buildDepotAgg(byMonth[mo],false);});
-  weeks.forEach(function(wk){idx.by_week[wk]=buildDepotAgg(byWeek[wk],false);});
+  var idx={years:years,months:months,weeks:weeks,all:buildDepotAgg(rows,true,true),by_year:{},by_month:{},by_week:{}};
+  years.forEach(function(y){idx.by_year[y]=buildDepotAgg(byYear[y],false,false);});
+  months.forEach(function(mo){idx.by_month[mo]=buildDepotAgg(byMonth[mo],false,false);});
+  weeks.forEach(function(wk){idx.by_week[wk]=buildDepotAgg(byWeek[wk],false,false);});
   return idx;
 }
 
